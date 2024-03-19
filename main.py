@@ -4,6 +4,14 @@ from PIL import Image, ImageTk
 from map import *
 from skimage.draw import disk
 import time
+import argparse
+
+parser = argparse.ArgumentParser(
+    prog = "main.py",
+    description= "Code for demonstrating QLearning, First Visit Monte Carlo and SARSA"
+)
+
+parser.add_argument("-mapDir", type = str, default = "maps", help = "Directory to save generated maps to")
 
 class DataLabelingStateMachine():
   def __init__(self):

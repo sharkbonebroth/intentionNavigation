@@ -2,6 +2,8 @@ from __future__ import annotations
 import numpy as np
 import random
 
+MAPSCALE = 0.05 # each pixel is 0.05m
+
 class Map:
   def __init__(self, mapGrid: np.ndarray):
     self.height = mapGrid.shape[0]
