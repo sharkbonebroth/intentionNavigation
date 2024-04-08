@@ -1,6 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import random
+from pathlib import Path
 
 MAPSCALE = 0.05 # each pixel is 0.05m
 
@@ -9,12 +10,20 @@ class Map:
     self.height = mapGrid.shape[0]
     self.width = mapGrid.shape[1]
     self.mapGrid = mapGrid
+    self.name = ""
 
   @classmethod
   def fromFile(cls, filePath: str) -> Map:
     mapGrid = np.load(filePath, allow_pickle=True)
+    mapName = Path(filePath).stem
+
+    newMap = Map(mapGrid)
+    newMap.setName(mapName)
           
-    return Map(mapGrid)
+    return newMap
+
+  def setName(self, name: str):
+    self.name = name
 
   def saveToFile(self, filePath: str):
     np.save(filePath, self.mapGrid)
