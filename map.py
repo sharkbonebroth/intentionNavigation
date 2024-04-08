@@ -2,6 +2,8 @@ from __future__ import annotations
 import numpy as np
 import random
 from pathlib import Path
+from typing import Tuple
+from skimage.draw import rectangle, rectangle_perimeter
 
 MAPSCALE = 0.05 # each pixel is 0.05m
 
@@ -42,7 +44,7 @@ class Map:
 
     return colorImageNpArray
 
-class mapGenerator:
+class CellularAutomataMapGenerator:
   def __init__(self):
     pass
 
@@ -76,7 +78,7 @@ class mapGenerator:
 
     return numSurrounding
 
-  def generateMapCellularAutomata(
+  def generateMap(
     self, 
     mapWidth: int, 
     mapHeight: int, 
@@ -115,4 +117,119 @@ class mapGenerator:
 
     # Upscale the generated map grid
     scaledMapGrid = mapGridNext.repeat(scaleFactor, axis=0).repeat(scaleFactor, axis=1)
+    return Map(scaledMapGrid)
+
+
+class Section:
+  def __init__(self, startX: int, startY: int, width: int, height: int):
+    self.startX = startX
+    self.startY = startY
+    self.width = width
+    self.height = height
+    self.centerX = int(startX + width / 2)
+    self.centerY = int(startY + height / 2)
+    self.lChild = None
+    self.rChild = None
+
+  def setLChild(self, lChild: Section):
+    self.lChild = lChild
+
+  def setRChild(self, rChild: Section):
+    self.rChild = rChild
+
+class MapBSPTree:
+  def __init__(self, width: int, height: int, numIters: int):
+    self.root = Section(0, 0, width, height)
+    self.recursiveSplitSections(self.root, numIters)
+
+  def randomSplit(self, section: Section) -> Tuple[Section, Section]: # direction, split coordinate
+    lChild = None
+    rChild = None
+    lRatio = 0
+    rRatio = 0
+    validSplit = False
+
+    while (not validSplit):
+      if random.random() < 0.5: # Vertical split
+        splitRangeDiv2 = int(section.height / 3)
+        splitCoordinate = random.randint(section.centerY - splitRangeDiv2, section.centerY + splitRangeDiv2)
+        lChildHeight = splitCoordinate - section.startY
+        rChildHeight = section.height - lChildHeight
+        
+        lChild = Section(section.startX, section.startY, section.width, lChildHeight)
+        lRatio = section.width/lChildHeight
+        rChild = Section(section.startX, splitCoordinate, section.width, rChildHeight)
+        rRatio = section.width/rChildHeight
+      else: # Horizontal split
+        splitRangeDiv2 = int(section.width / 3)
+        splitCoordinate = random.randint(section.centerX - splitRangeDiv2, section.centerX + splitRangeDiv2)
+        lChildWidth = splitCoordinate - section.startX
+        rChildWidth = section.width - lChildWidth
+
+        lChild = Section(section.startX, section.startY, lChildWidth, section.height)
+        lRatio = section.height/lChildWidth
+        rChild = Section(splitCoordinate, section.startY, rChildWidth, section.height)
+        rRatio = section.height/rChildWidth
+
+      if not (lRatio < 0.5 or lRatio > 2.5 or rRatio < 0.5 or rRatio > 2.5):
+        validSplit = True
+    
+    return (lChild, rChild)
+
+  def recursiveSplitSections(self, section: Section, numIters: int):
+    if numIters == 0:
+      return
+
+    lChild, rChild = self.randomSplit(section)
+    self.recursiveSplitSections(lChild, numIters - 1)
+    self.recursiveSplitSections(rChild, numIters - 1)
+    section.setLChild(lChild)
+    section.setRChild(rChild)
+
+class BSPTreeMapGenerator:
+  def __init__(self):
+    pass
+
+  def spawnCorridor(self, lChild: Section, rChild: Section, mapGrid: np.ndarray):
+    start = (lChild.centerY, lChild.centerX)
+    end = (rChild.centerY + 1, rChild.centerX + 1)
+    rr, cc = rectangle(start, end = end, shape=mapGrid.shape)
+    mapGrid[rr, cc] = False
+
+  def spawnRoom(self, section: Section, mapGrid: np.ndarray):
+    roomWidth = random.randint(int(section.width * 0.6), int(section.width * 0.7))
+    roomHeight = random.randint(int(section.height * 0.6), int(section.height * 0.7))
+
+    roomWidthD2 = int(roomWidth/2)
+    roomHeightD2 = int(roomHeight/2)
+
+    start = (section.centerY - roomHeightD2, section.centerX - roomWidthD2)
+    end = (section.centerY + roomHeightD2, section.centerX + roomWidthD2)
+
+    rr, cc = rectangle(start, end = end, shape=mapGrid.shape)
+    mapGrid[rr, cc] = False
+
+  def spawnMap(self, rootSection: Section, mapGrid: np.ndarray):
+    if rootSection.lChild != None:
+      self.spawnCorridor(rootSection.lChild, rootSection.rChild, mapGrid)
+      self.spawnMap(rootSection.lChild, mapGrid)
+      self.spawnMap(rootSection.rChild, mapGrid)
+    else:
+      self.spawnRoom(rootSection, mapGrid)
+
+  def generateMap(
+    self, 
+    mapWidth: int, 
+    mapHeight: int, 
+    scaleFactor: int,
+    numIters: int
+  ):
+    width = int(mapWidth / scaleFactor)
+    height = int(mapHeight / scaleFactor)
+    mapBSTTree = MapBSPTree(width, height, numIters)
+    mapGrid = np.ones((height, width), dtype = bool)
+    self.spawnMap(mapBSTTree.root, mapGrid)
+
+    # Upscale the generated map grid
+    scaledMapGrid = mapGrid.repeat(scaleFactor, axis=0).repeat(scaleFactor, axis=1)
     return Map(scaledMapGrid)

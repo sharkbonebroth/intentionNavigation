@@ -9,7 +9,7 @@ import sys
 import pickle
 import math
 import copy
-
+import random
 
 parser = argparse.ArgumentParser(
     prog = "main.py",
@@ -46,6 +46,14 @@ class DataLabelingStateMachine():
     else:
       return "confirming start and end points"
 
+mapGenCA = CellularAutomataMapGenerator()
+mapGenBSP = BSPTreeMapGenerator()
+def generateMap():
+  if random.random() > 0.5:
+    return mapGenCA.generateMap(1200, 800, 16, "random", 0.5, 5, 4, 5)
+  else:
+    return mapGenBSP.generateMap(1200, 800, 16, 4)
+
 def updateMapImage(imgNpArray: np.ndarray):
   global panel
   imgNew =  ImageTk.PhotoImage(image=Image.fromarray(imgNpArray))
@@ -67,7 +75,7 @@ def toggleDataLabelingButtons(state: bool):
 def generateMapCallback():
   toggleDataLabelingButtons(False)
   global map, imgNpArray, originalImgNpArray, startPoint, endPoint, dataLabelingStateMachine, mapSaved
-  map = mapGen.generateMapCellularAutomata(1200, 800, 16, "random", 0.5, 5, 4, 5)
+  map = generateMap()
   mapSaved = False
   imgNpArray = map.getColorImageNpArray()
   originalImgNpArray = copy.deepcopy(imgNpArray)
@@ -198,8 +206,9 @@ frame.pack()
 
 # Initialize the initial map
 mapSaved = False
-mapGen = mapGenerator()
-map = mapGen.generateMapCellularAutomata(1200, 800, 16, "random", 0.5, 5, 4, 7)
+map = generateMap()
+
+# map = mapGen.generateMap(1200, 800, 16, "random", 0.5, 5, 4, 7)
 imgNpArray = map.getColorImageNpArray()
 originalImgNpArray = copy.deepcopy(imgNpArray)
 img =  ImageTk.PhotoImage(image=Image.fromarray(imgNpArray))
