@@ -192,13 +192,13 @@ class BSPTreeMapGenerator:
 
   def spawnCorridor(self, lChild: Section, rChild: Section, mapGrid: np.ndarray):
     start = (lChild.centerY, lChild.centerX)
-    end = (rChild.centerY + 1, rChild.centerX + 1)
+    end = (rChild.centerY + 2, rChild.centerX + 2)
     rr, cc = rectangle(start, end = end, shape=mapGrid.shape)
     mapGrid[rr, cc] = False
 
   def spawnRoom(self, section: Section, mapGrid: np.ndarray):
-    roomWidth = random.randint(int(section.width * 0.6), int(section.width * 0.7))
-    roomHeight = random.randint(int(section.height * 0.6), int(section.height * 0.7))
+    roomWidth = random.randint(int(section.width * 0.5), int(section.width * 0.7))
+    roomHeight = random.randint(int(section.height * 0.5), int(section.height * 0.7))
 
     roomWidthD2 = int(roomWidth/2)
     roomHeightD2 = int(roomHeight/2)

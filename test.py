@@ -4,5 +4,5 @@ from pathlib import Path
 import pickle
 
 
-
-print(pickle.load(open("labelledData", "rb")))
+for i in np.linspace(4, 7, 100):
+  print(i)

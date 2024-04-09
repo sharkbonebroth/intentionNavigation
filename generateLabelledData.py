@@ -2,6 +2,7 @@ import tkinter as tk
 import tkinter.font as font
 from PIL import Image, ImageTk
 from map import *
+from path import *
 from skimage.draw import disk, line
 import time
 import argparse
@@ -50,7 +51,7 @@ mapGenCA = CellularAutomataMapGenerator()
 mapGenBSP = BSPTreeMapGenerator()
 def generateMap():
   if random.random() > 0.5:
-    return mapGenCA.generateMap(1200, 800, 16, "random", 0.5, 5, 4, 5)
+    return mapGenCA.generateMap(1200, 800, 16, "random", 0.5, 5, 4, 7)
   else:
     return mapGenBSP.generateMap(1200, 800, 16, 4)
 
@@ -98,6 +99,10 @@ def plotLine(xStart: int, yStart: int, angle: float, npArrayImg: np.ndarray, pix
   rr, cc = line(yStart, xStart, yEnd, xEnd)
   npArrayImg[rr, cc] = pixelValue
 
+def plotTrajectory(trajectory: List[Tuple[int, int]], npArrayImg: np.ndarray, pixelValue: np.ndarray):
+  for point in trajectory:
+    npArrayImg[point[1]][point[0]] = pixelValue
+
 def mouseClickCallback(eventOrigin):
   global imgNpArray
   widgetName = str(eventOrigin.widget).split('.')[-1]
@@ -139,7 +144,9 @@ def mouseReleaseCallback(eventOrigin):
       angle = math.atan2(yDiff, xDiff)
       endPoint[2] = angle
       plotLine(endPoint[0], endPoint[1], angle, imgNpArray, [0, 255, 0])
-
+      solver = AStarTrajectorySolver()
+      traj = solver.solveTrajectory(map, startPoint, endPoint)
+      plotTrajectory(traj, imgNpArray, [0, 255, 0])
       toggleDataLabelingButtons(True)
       dataLabelingStateMachine.next()
 
