@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import Tuple, List
 from map import Map
-import copy
 from scipy import ndimage
 import heapq
 import numpy as np
@@ -57,17 +56,17 @@ class AStarTrajectorySolver:
   def solveTrajectory(self, map: Map, startPoint: Tuple[int, int, float], endPoint: Tuple[int, int, float]) -> Trajectory:
     mapGrid = map.mapGrid
 
-    # Downsample map
-    downsampleRate = 4 # Assuming a map scale of 1 px to 5cm, this downsamples it to 1 px per 20cm
-    mapGridDownsampled = mapGrid[::downsampleRate, ::downsampleRate]
-    startPointDownSampled = (int(startPoint[0] / downsampleRate), int(startPoint[1] / downsampleRate))
-    endPointDownSampled = (int(endPoint[0] / downsampleRate), int(endPoint[1] / downsampleRate))
-    
     # Perform dilation operation for inflation zones
     structuringElement = ndimage.generate_binary_structure(2, 1)
-    structuringElement = ndimage.iterate_structure(structuringElement, 4).astype(bool)
-    mapGridDownsampled = ndimage.binary_dilation(mapGridDownsampled, structure=structuringElement).astype(mapGrid.dtype)
+    structuringElement = ndimage.iterate_structure(structuringElement, 20).astype(bool)
+    mapGridInflated = ndimage.binary_dilation(mapGrid, structure=structuringElement).astype(mapGrid.dtype)
 
+    # Downsample map
+    downsampleRate = 4 # Assuming a map scale of 1 px to 5cm, this downsamples it to 1 px per 20cm
+    mapGridDownsampled = mapGridInflated[::downsampleRate, ::downsampleRate]
+    startPointDownSampled = (int(startPoint[0] / downsampleRate), int(startPoint[1] / downsampleRate))
+    endPointDownSampled = (int(endPoint[0] / downsampleRate), int(endPoint[1] / downsampleRate))
+ 
     # Solve A*
     path = [] # list of tuple[int, int]
     frontier = [(self.getEuclideanDistance(startPointDownSampled, endPointDownSampled), 0, AStarNode(startPointDownSampled, None, 0))]

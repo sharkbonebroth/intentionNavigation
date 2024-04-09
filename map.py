@@ -3,7 +3,8 @@ import numpy as np
 import random
 from pathlib import Path
 from typing import Tuple
-from skimage.draw import rectangle, rectangle_perimeter
+from scipy import ndimage
+from skimage.draw import rectangle
 
 MAPSCALE = 0.05 # each pixel is 0.05m
 
@@ -35,12 +36,23 @@ class Map:
 
   def getColorImageNpArray(self):
     colorImageNpArray = np.zeros((self.height, self.width, 3), "uint8")
+    
+    # Perform dilation operation to show inflation zones
+    structuringElement = ndimage.generate_binary_structure(2, 1)
+    structuringElement = ndimage.iterate_structure(structuringElement, 20).astype(bool)
+    dilatedGrid = ndimage.binary_dilation(self.mapGrid, structure=structuringElement).astype(self.mapGrid.dtype)
+    
     for i in range(self.height):
       for j in range(self.width):
         if not self.mapGrid[i][j]:
-          colorImageNpArray[i][j][0] = 255
-          colorImageNpArray[i][j][1] = 255
-          colorImageNpArray[i][j][2] = 255
+          if dilatedGrid[i][j]:
+            colorImageNpArray[i][j][0] = 255
+            colorImageNpArray[i][j][1] = 255
+            colorImageNpArray[i][j][2] = 90
+          else:
+            colorImageNpArray[i][j][0] = 255
+            colorImageNpArray[i][j][1] = 255
+            colorImageNpArray[i][j][2] = 255
 
     return colorImageNpArray
 
