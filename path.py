@@ -7,11 +7,6 @@ import numpy as np
 import math
 from skimage.draw import line
 
-class Trajectory:
-  def __init__(self, startPoint: Tuple[int, int], endPoint: Tuple[int, int], map: Map):
-    self.pathWaypoints = []
-    pass
-
 class AStarNode:
   def __init__(self, coords: Tuple[int, int], parent: AStarNode, g: float):
     self.coords = coords # x, y
@@ -53,7 +48,7 @@ class AStarTrajectorySolver:
     # Should we encode some vehicle dynamics here?
     return True
 
-  def solveTrajectory(self, map: Map, startPoint: Tuple[int, int, float], endPoint: Tuple[int, int, float]) -> Trajectory:
+  def solveTrajectory(self, map: Map, startPoint: Tuple[int, int, float], endPoint: Tuple[int, int, float]) -> List[Tuple[int, int]]:
     mapGrid = map.mapGrid
 
     # Perform dilation operation for inflation zones

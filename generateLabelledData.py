@@ -21,6 +21,13 @@ parser.add_argument("-mapDir", type = str, default = "maps", help = "Directory t
 parser.add_argument("-labelledDataPath", type = str, default = "labelledData")
 args = None
 
+class TrainingDataPoint():
+  def __init__(self, startPoint, endPoint, direction, mapName):
+    self.startPoint = startPoint
+    self.endPoint = endPoint
+    self.direction = direction
+    self.mapName = mapName
+
 class DataLabelingStateMachine():
   def __init__(self):
     self.state = 0
@@ -171,7 +178,18 @@ def confirmStartAndEndPointsCallback(direction: int): # -1: left, 0: straight, 1
       mapSaved = True
 
     print("New start and end points confirmed")
-    startAndEndPoints.append((startPoint, endPoint, direction, map.name))
+
+    # We flip the start and end point angles due to how y is downwards for images
+    startPointAngleFlipped = (startPoint[0], startPoint[1], -startPoint[2])
+    endPointAngleFlipped = (endPoint[0], endPoint[1], -endPoint[2])
+    TrainingDataPoints.append(
+      TrainingDataPoint(
+        startPointAngleFlipped,
+        endPointAngleFlipped,
+        direction,
+        map.name
+      )
+    )
     resetImgNpArray()
     startPoint = None
     endPoint = None
@@ -192,15 +210,15 @@ def cancelLabelling():
   updateMapImage(imgNpArray)
 
 def finishLabelling(eventOrigin):
-  global startAndEndPoints
+  global TrainingDataPoints
   print("Saving labelled data...")
-  pickle.dump(startAndEndPoints, open(args.labelledDataPath, 'wb'))
+  pickle.dump(TrainingDataPoints, open(args.labelledDataPath, 'wb'))
   
   app.withdraw()
   sys.exit()
 
 # Initialize the data label array, and the labelling state machine
-startAndEndPoints  = []
+TrainingDataPoints = []
 startPoint = None
 endPoint = None
 dataLabelingStateMachine = DataLabelingStateMachine()
