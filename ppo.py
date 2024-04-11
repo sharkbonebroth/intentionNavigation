@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import time
-from params import TrainingParameters, EnvParameters, NetworkParameters
+from params import TrainingParameters, EnvParameters
 import gym
 
 class ReplayBuffer:
@@ -38,8 +37,16 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 def normalize_fn(x : np.ndarray):
     return (x - x.mean()) / (x.std() + 1e-8)
 
+def product(iter):
+    val = 1
+    for item in iter:
+        val *= item
+    return val
+
 class ActorCritic(nn.Module):
     def __init__(self, obs_space_shape, action_space_shape):
+        obs_space_shape = product(obs_space_shape)
+        action_space_shape = product(action_space_shape)
         super().__init__()
         
         self.critic = nn.Sequential(
@@ -66,7 +73,11 @@ class PPO:
             {'params' : self.policy.critic.parameters(), 'lr' : TrainingParameters.lr_critic}
         ])
         
-    def get_action_and_value(self, state, action=None):
+        self.obs_space_shape = product(obs_space_shape)
+        self.action_space_shape = product(action_space_shape)
+        
+    def get_action_and_value(self, state : np.ndarray , action=None):
+        state = torch.reshape(state, (-1, self.obs_space_shape))
         # logits are unnormalized action probs
         logits = self.policy.actor(state)
         probs = torch.distributions.Categorical(logits=logits)
@@ -76,6 +87,7 @@ class PPO:
         return action, probs.log_prob(action), probs.entropy(), value
         
     def get_value(self, state):
+        state = torch.reshape(state, (-1, self.obs_space_shape))
         value = self.policy.critic(state)
         return value
     
@@ -120,11 +132,11 @@ class IntentionNavEnv(gym.Env):
         """
         return 0.0
     
-    def reset(self) -> None:
+    def reset(self) -> np.ndarray:
         """
-        TODO: Reset the environment to default state
+        TODO: Reset the environment to default state and returns ndarray with same shape as obs
         """
-        return
+        return self.obs
     
 def get_env(obs_space_shape):
     return IntentionNavEnv(obs_space_shape)
@@ -145,6 +157,7 @@ def rollout(env : gym.Env, buffer : ReplayBuffer):
         
         # Gym part
         next_obs, reward, done, info = env.step(action.cpu().numpy())
+        done = np.array([done])
         buffer.rewards[step] = torch.tensor(reward).to(device).view(-1)
         next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
     return next_obs, next_done
@@ -191,7 +204,7 @@ if __name__ == "__main__":
             next_value = ppo.get_value(next_obs).reshape(1,-1)
             advantages = torch.zeros_like(buffer.rewards).to(device)
             lastgaelam = 0
-            for t in reversed(TrainingParameters.N_STEPS):
+            for t in reversed(range(TrainingParameters.N_STEPS)):
                 if t == TrainingParameters.N_STEPS - 1:
                     nextnonterminal = 1.0 - next_done
                     nextvalues = next_value
