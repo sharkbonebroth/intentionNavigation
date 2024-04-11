@@ -84,7 +84,8 @@ class PPO:
         if action is None:
             action = probs.sample()
         value = self.get_value(state)
-        return action, probs.log_prob(action), probs.entropy(), value
+        action = torch.unsqueeze(action, -1)
+        return action , probs.log_prob(action) , probs.entropy(), value
         
     def get_value(self, state):
         state = torch.reshape(state, (-1, self.obs_space_shape))
@@ -102,10 +103,10 @@ class Action:
     def get_as_ndarray(self) -> np.ndarray:
         return np.array([self.lin_x, self.ang_z])
     
-class IntentionNavEnv(gym.Env):
+class DummyIntentionNavEnv(gym.Env):
     def __init__(self, obs_space_shape):
         self.done : bool = False
-        self.obs : np.ndarray = np.zeros(obs_space_shape)
+        self.obs_space_shape = obs_space_shape
         
     def step(self, action : np.ndarray) -> tuple[np.ndarray, float, bool, dict]:
         obs = self.get_observation()
@@ -124,7 +125,7 @@ class IntentionNavEnv(gym.Env):
         """
         TODO: Returns current observation
         """
-        return self.obs
+        return torch.rand(self.obs_space_shape)
         
     def get_reward(self, action) -> float:
         """
@@ -136,10 +137,10 @@ class IntentionNavEnv(gym.Env):
         """
         TODO: Reset the environment to default state and returns ndarray with same shape as obs
         """
-        return self.obs
+        return torch.zeros(self.obs_space_shape)
     
-def get_env(obs_space_shape):
-    return IntentionNavEnv(obs_space_shape)
+def get_env():
+    return DummyIntentionNavEnv(EnvParameters.OBS_SPACE_SHAPE)
 
 def rollout(env : gym.Env, buffer : ReplayBuffer):
     next_obs = torch.Tensor(env.reset()).to(device)
@@ -183,7 +184,7 @@ if __name__ == "__main__":
     
     ppo = PPO(EnvParameters.OBS_SPACE_SHAPE, EnvParameters.ACT_SPACE_SHAPE)
     buffer = ReplayBuffer(TrainingParameters.N_STEPS, TrainingParameters.N_ENVS, EnvParameters.OBS_SPACE_SHAPE, EnvParameters.ACT_SPACE_SHAPE)
-    env = get_env(EnvParameters.OBS_SPACE_SHAPE)
+    env = get_env()
     
     num_updates = TrainingParameters.TOTAL_TIMESTEPS // batch_size
     target_kl = None
