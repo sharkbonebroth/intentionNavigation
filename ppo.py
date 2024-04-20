@@ -112,15 +112,15 @@ class IntentionNavEnv(gym.Env):
         self.path = pathIn
         self.map = mapIn
         self.robot = Robot((0.0, 0.0))
-        self.prevRobotPositionWorld = (0.0, 0.0)
+        self.prevRobotPositionWorld = (0.0, 0.0) #both self.robot and self.prevRobotPositionWorld should have yaw/heading data as well?
         self.intention = self.path.getIntention()
         
         
     def step(self, action : np.ndarray) -> tuple[np.ndarray, float, bool, dict]:
-        self.robot.move(action)
+        self.robot.move(action) #FROM LIYANG: NEED TO PASS IN MAP
         
         # Append intention to obs
-        obs = self.robot.getFeedbackImage()
+        obs = self.robot.getFeedbackImage() #FROM LIYANG: NEED TO PASS IN MAP
         
         curRobotPositionsWorld = self.robot.getCurrentRobotPosWorld()
         reward = self.get_reward(action, curRobotPositionsWorld, self.prevRobotPositionWorld)
