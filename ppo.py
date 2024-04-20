@@ -3,7 +3,9 @@ import torch.nn as nn
 import numpy as np
 from params import TrainingParameters, EnvParameters
 import gym
-
+from generateLabelledData import generateMap
+from robot import Robot
+from path import Trajectory
 class ReplayBuffer:
     def __init__(self, num_steps : int, num_envs : int, obs_space_shape : tuple, act_space_shape : tuple):
         batch_shape = (num_steps, num_envs)
@@ -102,6 +104,32 @@ class Action:
         
     def get_as_ndarray(self) -> np.ndarray:
         return np.array([self.lin_x, self.ang_z])
+
+class IntentionNavEnv(gym.Env):
+    def __init__(self, obs_space_shape, pathIn, mapIn):
+        self.done : bool = False
+        self.obs_space_shape = obs_space_shape
+        self.path = pathIn
+        self.map = mapIn
+        self.robot = Robot((0.0, 0.0))
+        self.prevRobotPositionWorld = (0.0, 0.0)
+        self.intention = self.path.getIntention()
+        
+        
+    def step(self, action : np.ndarray) -> tuple[np.ndarray, float, bool, dict]:
+        self.robot.move(action)
+        
+        # Append intention to obs
+        obs = self.robot.getFeedbackImage()
+        
+        curRobotPositionsWorld = self.robot.getCurrentRobotPosWorld()
+        reward = self.get_reward(action, curRobotPositionsWorld, self.prevRobotPositionWorld)
+        
+        done = self.is_done()
+        self.prevRobotPositionWorld = curRobotPositionsWorld
+        
+        info = dict()
+        return obs, reward, done, info
     
 class DummyIntentionNavEnv(gym.Env):
     def __init__(self, obs_space_shape):
