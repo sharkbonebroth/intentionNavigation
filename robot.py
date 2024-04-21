@@ -88,14 +88,14 @@ class Robot:
     curr_x, curr_y = self.getCurrentRobotPosWorld()
     target_x, target_y = curr_x+move_x, curr_y+move_y
     while not self.isLegalMovement(target_x,target_y):
-      if (dx!=0 and dy!=0):
+      if (move_x!=0 and move_y!=0):
         move_y = move_y-1
         move_x = math.ceil(move_x - (move_x/move_y)) #similar triangle. use math.ceil to adapt to discrete grid map. will result in movemment vector differ from original.
         target_x, target_y = curr_x+move_x, curr_y+move_y
-      elif dy==0: #straight movement in x-direction
+      elif move_y==0: #straight movement in x-direction
         move_x -= move_x
         target_x = curr_x+move_x
-      elif dx==0: #straight movment in y-direction
+      elif move_x==0: #straight movment in y-direction
         move_y -= move_y
         target_y = curr_y+move_y
     return (target_x, target_y)
