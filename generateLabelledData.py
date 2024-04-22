@@ -22,11 +22,12 @@ parser.add_argument("-labelledDataPath", type = str, default = "labelledData")
 args = None
 
 class TrainingDataPoint():
-  def __init__(self, startPoint, endPoint, direction, mapName):
+  def __init__(self, startPoint, endPoint, direction, mapName, trajectory):
     self.startPoint = startPoint
     self.endPoint = endPoint
     self.direction = direction
     self.mapName = mapName
+    self.trajectory = trajectory
 
 class DataLabelingStateMachine():
   def __init__(self):
@@ -82,7 +83,7 @@ def toggleDataLabelingButtons(state: bool):
 
 def generateMapCallback():
   toggleDataLabelingButtons(False)
-  global map, imgNpArray, originalImgNpArray, startPoint, endPoint, dataLabelingStateMachine, mapSaved
+  global map, imgNpArray, originalImgNpArray, startPoint, endPoint, dataLabelingStateMachine, mapSaved, trajectory
   map = generateMap()
   mapSaved = False
   imgNpArray = map.getColorImageNpArray()
@@ -91,6 +92,7 @@ def generateMapCallback():
   updateMapImage(imgNpArray)
   startPoint = None
   endPoint = None
+  trajectory = None
   dataLabelingStateMachine.reset()
 
 def plotPoint(x: int, y: int, npArrayImg: np.ndarray, pixelValue: np.ndarray):
@@ -131,6 +133,7 @@ def mouseClickCallback(eventOrigin):
 
 def mouseReleaseCallback(eventOrigin):
   global imgNpArray
+  global trajectory
   widgetName = str(eventOrigin.widget).split('.')[-1]
   if (widgetName == "map"):
     x = eventOrigin.x
@@ -153,6 +156,7 @@ def mouseReleaseCallback(eventOrigin):
       plotLine(endPoint[0], endPoint[1], angle, imgNpArray, [0, 255, 0])
       solver = AStarTrajectorySolver()
       traj = solver.solveTrajectory(map, startPoint, endPoint)
+      trajectory = copy.deepcopy(traj)
       plotTrajectory(traj, imgNpArray, [0, 255, 0])
       toggleDataLabelingButtons(True)
       dataLabelingStateMachine.next()
@@ -166,7 +170,7 @@ def resetImgNpArray():
 
 
 def confirmStartAndEndPointsCallback(direction: int): # -1: left, 0: straight, 1: right
-  global startPoint, endPoint
+  global startPoint, endPoint, trajectory
 
   if dataLabelingStateMachine.getState() == 2:
     global map, mapSaved, args
@@ -179,20 +183,21 @@ def confirmStartAndEndPointsCallback(direction: int): # -1: left, 0: straight, 1
 
     print("New start and end points confirmed")
 
-    # We flip the start and end point angles due to how y is downwards for images
-    startPointAngleFlipped = (startPoint[0], startPoint[1], -startPoint[2])
-    endPointAngleFlipped = (endPoint[0], endPoint[1], -endPoint[2])
+    startPointAngleFlipped = (startPoint[0], startPoint[1], startPoint[2])
+    endPointAngleFlipped = (endPoint[0], endPoint[1], endPoint[2])
     TrainingDataPoints.append(
       TrainingDataPoint(
         startPointAngleFlipped,
         endPointAngleFlipped,
         direction,
-        map.name
+        map.name,
+        trajectory
       )
     )
     resetImgNpArray()
     startPoint = None
     endPoint = None
+    trajectory = None
     dataLabelingStateMachine.next()
 
     toggleDataLabelingButtons(False)
@@ -201,9 +206,10 @@ def confirmStartAndEndPointsCallback(direction: int): # -1: left, 0: straight, 1
 def cancelLabelling():
   dataLabelingStateMachine.reset()
 
-  global startPoint, endPoint
+  global startPoint, endPoint, trajectory
   startPoint = None
   endPoint = None
+  trajectory = None
 
   resetImgNpArray()
   toggleDataLabelingButtons(False)
@@ -221,6 +227,7 @@ def finishLabelling(eventOrigin):
 TrainingDataPoints = []
 startPoint = None
 endPoint = None
+trajectory = None
 dataLabelingStateMachine = DataLabelingStateMachine()
 
 # Initialize the GUI

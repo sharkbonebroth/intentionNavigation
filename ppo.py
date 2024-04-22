@@ -107,7 +107,7 @@ class IntentionNavEnv(gym.Env):
         self.path : Trajectory = pathIn
         self.map : Map = mapIn
         self.robot = Robot(0.0, 0.0, 0.0)
-        self.prevRobotPoseWorld = self.robot.getCurrentRobotPosWorld()
+        self.prevRobotPoseWorld = self.robot.currPositionActual
         self.intention = self.path.getIntention()
         self.steps = 0
         
