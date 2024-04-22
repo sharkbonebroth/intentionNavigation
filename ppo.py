@@ -6,6 +6,7 @@ import gym
 from generateLabelledData import generateMap
 from robot import Robot
 from path import Trajectory
+from typing import Tuple
 class ReplayBuffer:
     def __init__(self, num_steps : int, num_envs : int, obs_space_shape : tuple, act_space_shape : tuple):
         batch_shape = (num_steps, num_envs)
@@ -116,7 +117,7 @@ class IntentionNavEnv(gym.Env):
         self.intention = self.path.getIntention()
         
         
-    def step(self, action : np.ndarray) -> tuple[np.ndarray, float, bool, dict]:
+    def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
         self.robot.move(action) #FROM LIYANG: NEED TO PASS IN MAP
         
         # Append intention to obs

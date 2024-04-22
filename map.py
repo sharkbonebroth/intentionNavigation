@@ -13,6 +13,8 @@ class Map:
     self.height = mapGrid.shape[0]
     self.width = mapGrid.shape[1]
     self.mapGrid = mapGrid
+    self.inflationZoneGrid = self.getInflationZoneGrid(mapGrid)
+    self.colorImageNpArray = self.getColorImageNpArray()
     self.name = ""
 
   @classmethod
@@ -31,21 +33,18 @@ class Map:
   def saveToFile(self, filePath: str):
     np.save(filePath, self.mapGrid)
 
-  def getLidarMeasurement(self, x: float, y: float, rad: float) -> np.ndarray:
-    pass
+  def getInflationZoneGrid(self, mapGrid):
+    structuringElement = ndimage.generate_binary_structure(2, 1)
+    structuringElement = ndimage.iterate_structure(structuringElement, 20).astype(bool)
+    return ndimage.binary_dilation(mapGrid, structure=structuringElement).astype(mapGrid.dtype)
 
   def getColorImageNpArray(self):
     colorImageNpArray = np.zeros((self.height, self.width, 3), "uint8")
     
-    # Perform dilation operation to show inflation zones
-    structuringElement = ndimage.generate_binary_structure(2, 1)
-    structuringElement = ndimage.iterate_structure(structuringElement, 20).astype(bool)
-    dilatedGrid = ndimage.binary_dilation(self.mapGrid, structure=structuringElement).astype(self.mapGrid.dtype)
-    
     for i in range(self.height):
       for j in range(self.width):
         if not self.mapGrid[i][j]:
-          if dilatedGrid[i][j]:
+          if self.inflationZoneGrid[i][j]:
             colorImageNpArray[i][j][0] = 255
             colorImageNpArray[i][j][1] = 255
             colorImageNpArray[i][j][2] = 90
