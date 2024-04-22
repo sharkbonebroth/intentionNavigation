@@ -3,7 +3,7 @@ import numpy as np
 from map import Map
 from scipy import ndimage
 import math
-from ppo import Action
+from utilTypes import Action
 
 odometryDataPointType = Tuple[float, float] # delta x, delta y
 MAPSCALE = 0.05 # each pixel is 0.05m
