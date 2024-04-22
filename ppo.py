@@ -3,10 +3,10 @@ import torch.nn as nn
 import numpy as np
 from params import TrainingParameters, EnvParameters
 import gym
-from generateLabelledData import generateMap
 from robot import Robot
-from path import Trajectory
-from typing import Tuple
+from utilTypes import Action, Trajectory
+from map import Map
+
 class ReplayBuffer:
     def __init__(self, num_steps : int, num_envs : int, obs_space_shape : tuple, act_space_shape : tuple):
         batch_shape = (num_steps, num_envs)
@@ -48,9 +48,9 @@ def product(iter):
 
 class ActorCritic(nn.Module):
     def __init__(self, obs_space_shape, action_space_shape):
+        super().__init__()
         obs_space_shape = product(obs_space_shape)
         action_space_shape = product(action_space_shape)
-        super().__init__()
         
         self.critic = nn.Sequential(
             layer_init(nn.Linear(obs_space_shape, 64)),
@@ -60,19 +60,22 @@ class ActorCritic(nn.Module):
             layer_init(nn.Linear(64, 1), std=1.)
         )
         
-        self.actor = nn.Sequential(
+        self.actor_mean = nn.Sequential(
             layer_init(nn.Linear(obs_space_shape, 64)),
             nn.Tanh(),
             layer_init(nn.Linear(64,64)),
             nn.Tanh(),
             layer_init(nn.Linear(64, action_space_shape), std=0.01)
         )
+        
+        self.actor_logstd = nn.Parameter(torch.zeros(1, action_space_shape))
 
 class PPO:
     def __init__(self, obs_space_shape, action_space_shape):
         self.policy = ActorCritic(obs_space_shape, action_space_shape).to(device)
         self.optimizer = torch.optim.Adam([
-            {'params' : self.policy.actor.parameters(), 'lr' : TrainingParameters.lr_actor},
+            {'params' : self.policy.actor_mean.parameters(), 'lr' : TrainingParameters.lr_actor},
+            {'params' : self.policy.actor_logstd, 'lr' : TrainingParameters.lr_actor},
             {'params' : self.policy.critic.parameters(), 'lr' : TrainingParameters.lr_critic}
         ])
         
@@ -82,55 +85,59 @@ class PPO:
     def get_action_and_value(self, state : np.ndarray , action=None):
         state = torch.reshape(state, (-1, self.obs_space_shape))
         # logits are unnormalized action probs
-        logits = self.policy.actor(state)
-        probs = torch.distributions.Categorical(logits=logits)
+        action_mean = self.policy.actor_mean(state)
+        action_logstd = self.policy.actor_logstd.expand_as(action_mean)
+        action_std = torch.exp(action_logstd)
+        probs = torch.distributions.Normal(action_mean, action_std)
         if action is None:
             action = probs.sample()
         value = self.get_value(state)
-        action = torch.unsqueeze(action, -1)
-        return action , probs.log_prob(action) , probs.entropy(), value
+        return action , probs.log_prob(action).sum(1) , probs.entropy().sum(1), value
         
     def get_value(self, state):
         state = torch.reshape(state, (-1, self.obs_space_shape))
         value = self.policy.critic(state)
         return value
     
-class Action:
-    def __init__(self, lin_x : float, ang_z : float):
-        """
-        TODO: is our action only lin x and ang z?
-        """
-        self.lin_x = lin_x
-        self.ang_z = ang_z
-        
-    def get_as_ndarray(self) -> np.ndarray:
-        return np.array([self.lin_x, self.ang_z])
-
 class IntentionNavEnv(gym.Env):
-    def __init__(self, obs_space_shape, pathIn, mapIn):
+    MAX_STEPS = 10000
+    def __init__(self, obs_space_shape : tuple, pathIn : Trajectory, mapIn : Map):
         self.done : bool = False
-        self.obs_space_shape = obs_space_shape
-        self.path = pathIn
-        self.map = mapIn
-        self.robot = Robot((0.0, 0.0))
-        self.prevRobotPositionWorld = (0.0, 0.0) #both self.robot and self.prevRobotPositionWorld should have yaw/heading data as well?
+        self.obs_space_shape : tuple = obs_space_shape
+        self.path : Trajectory = pathIn
+        self.map : Map = mapIn
+        self.robot = Robot(0.0, 0.0, 0.0)
+        self.prevRobotPoseWorld = self.robot.getCurrentRobotPosWorld()
         self.intention = self.path.getIntention()
+        self.steps = 0
         
-        
-    def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
-        self.robot.move(action) #FROM LIYANG: NEED TO PASS IN MAP
+    def step(self, action : np.ndarray) -> tuple[np.ndarray, float, bool, dict]:
+        self.robot.move(Action(action)) #FROM LIYANG: NEED TO PASS IN MAP
         
         # Append intention to obs
         obs = self.robot.getFeedbackImage() #FROM LIYANG: NEED TO PASS IN MAP
         
-        curRobotPositionsWorld = self.robot.getCurrentRobotPosWorld()
-        reward = self.get_reward(action, curRobotPositionsWorld, self.prevRobotPositionWorld)
+        curRobotPoseWorld = self.robot.getCurrentRobotPosWorld()
+        reward = self.get_reward(action, curRobotPoseWorld, self.prevRobotPoseWorld)
         
         done = self.is_done()
-        self.prevRobotPositionWorld = curRobotPositionsWorld
+        self.prevRobotPoseWorld = curRobotPoseWorld
         
         info = dict()
+        
+        self.steps += 1
         return obs, reward, done, info
+    
+    def get_reward(self, action : np.ndarray, curRobotPos, prevRobotPos):
+        # Add reward calculation for path following
+        return 0.0
+    
+    def is_done(self):
+        # Add goal check here
+        
+        if self.steps >= IntentionNavEnv.MAX_STEPS:
+            return True
+        return False
     
 class DummyIntentionNavEnv(gym.Env):
     def __init__(self, obs_space_shape):
@@ -160,7 +167,7 @@ class DummyIntentionNavEnv(gym.Env):
         """
         TODO: Returns reward based on state and action
         """
-        return 0.0
+        return np.random.random()
     
     def reset(self) -> np.ndarray:
         """
@@ -257,7 +264,7 @@ if __name__ == "__main__":
                 minibatch_indices = batch_indices[start:end]
                 
                 _, newlogprob, entropy, newvalue = ppo.get_action_and_value(
-                    b_obs[minibatch_indices], b_actions.long()[minibatch_indices]
+                    b_obs[minibatch_indices], b_actions[minibatch_indices]
                 )
                 logratio = newlogprob - b_logprobs[minibatch_indices]
                 ratio = logratio.exp()
