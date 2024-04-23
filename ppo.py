@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from params import TrainingParameters, EnvParameters, NetParameters
-import gym
+import gymnasium
 from robot import Robot
 from utilTypes import Action, trajectoryType, find_closest_point
 from map import Map
@@ -115,7 +115,7 @@ class PPO:
         value = self.policy.critic(state)
         return value
     
-class IntentionNavEnv(gym.Env):
+class IntentionNavEnv(gymnasium.Env):
     MAX_STEPS = 10000
     def __init__(self, obs_space_shape : Tuple, pathsIn : list[trajectoryType], mapIn : Map):
         self.done : bool = False
@@ -160,12 +160,12 @@ class IntentionNavEnv(gym.Env):
             return True
         return False
     
-class DummyIntentionNavEnv(gym.Env):
+class DummyIntentionNavEnv(gymnasium.Env):
     def __init__(self, obs_space_shape):
         self.done : bool = False
         self.obs_space_shape = obs_space_shape
         
-    def step(self, action : np.ndarray) -> tuple[np.ndarray, float, bool, dict]:
+    def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
         obs = self.get_observation()
         reward = self.get_reward(action)
         done = self.is_done()
@@ -199,7 +199,7 @@ class DummyIntentionNavEnv(gym.Env):
 def get_env():
     return DummyIntentionNavEnv(EnvParameters.OBS_SPACE_SHAPE)
 
-def rollout(env : gym.Env, buffer : ReplayBuffer):
+def rollout(env : gymnasium.Env, buffer : ReplayBuffer):
     next_obs = torch.Tensor(env.reset()).to(device)
     next_done = torch.zeros(TrainingParameters.N_ENVS).to(device)
     
