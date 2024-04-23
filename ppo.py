@@ -7,13 +7,13 @@ from robot import Robot
 from torch.cuda.amp.autocast_mode import autocast
 import torch.nn.functional as F
 from einops import rearrange
-from path import AStarTrajectorySolver
-
+from skimage.draw import disk, line
 from utilTypes import Action, trajectoryType, find_closest_point, Intention
-from map import Map
+from map import Map, MAPSCALE
 from typing import Tuple, List
-import json
 from dataLoader import DataLoader
+import math
+import matplotlib.pyplot as plt
 
 class ReplayBuffer:
     def __init__(self, num_steps : int, num_envs : int, obs_space_shape : tuple, act_space_shape : tuple):
@@ -165,6 +165,27 @@ class IntentionNavEnv(gymnasium.Env):
         
     def getObservations(self):
         return self.robot.getFeedbackImage(), float(self.curIntention)
+
+    def render(self):
+        img = np.copy(self.robot.mapImgWithPerfectOdomPlotted)
+        
+        # Plot the current position of the robot
+        robotPosition = self.robot.currPositionActual
+        robotImgX = int(robotPosition[0] / MAPSCALE)
+        robotImgY = int(robotPosition[1] / MAPSCALE)
+        rr, cc = disk(center = (robotImgY, robotImgX), radius = 5)
+        img[rr, cc] = np.array([0, 0, 255])
+
+        # Plot its angle
+        robotYaw = robotPosition[2]
+        endX = math.cos(robotYaw) * 10
+        endY = math.sin(robotYaw) * 10
+        rr, cc = line(robotImgY, robotImgX, endY, endX)
+        img[rr, cc] = np.array([0, 255, 0])
+
+        plt.imshow(img)
+        plt.show()
+
         
     def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
         self.robot.move(Action(*action)) 
