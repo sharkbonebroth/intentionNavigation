@@ -1,7 +1,23 @@
 import numpy as np
-from typing import TypeAlias
+import enum
 
-Trajectory: TypeAlias = tuple[float, float]
+trajectoryType = list[tuple[float, float]]
+
+def find_closest_point(point, traj : trajectoryType) -> int:
+    closestId = 0
+    closestDist = float('inf')
+    for id in range(len(traj)):
+        trajPoint = traj[id]
+        dist = np.linalg.norm(np.array(point) - np.array(trajPoint))
+        if dist < closestDist:
+            closestDist = dist
+            closestId =  id
+    return closestId
+
+class Intention(enum.Enum):
+  LEFT = -1
+  STRAIGHT = 0
+  RIGHT = 1
 
 class Action:
     def __init__(self, lin_x : float, ang_z : float):

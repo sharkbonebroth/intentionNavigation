@@ -6,7 +6,7 @@ import heapq
 import numpy as np
 import math
 from skimage.draw import line
-from utilTypes import Trajectory
+from utilTypes import trajectoryType
 
 class AStarNode:
   def __init__(self, coords: Tuple[int, int], parent: AStarNode, g: float):
@@ -49,7 +49,7 @@ class AStarTrajectorySolver:
     # Should we encode some vehicle dynamics here?
     return True
 
-  def solveTrajectory(self, map: Map, startPoint: Tuple[int, int, float], endPoint: Tuple[int, int, float]) -> Trajectory:
+  def solveTrajectory(self, map: Map, startPoint: Tuple[int, int, float], endPoint: Tuple[int, int, float]) -> trajectoryType:
     mapGrid = map.mapGrid
 
     # Perform dilation operation for inflation zones

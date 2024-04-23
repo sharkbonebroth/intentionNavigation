@@ -1,7 +1,13 @@
+class NetParameters:
+    ENV_SIZE = 512
+    INTENTION_SIZE = 8
+    # Intention Length
+    VECTOR_LEN = 2  # [intention, action t-1] (Primal vector length ) : [dx, dy, d total, action t-1]
+
 class EnvParameters:
     OBS_SPACE_SHAPE = (5, 5)
     ACT_SPACE_SHAPE = (2,)
-
+    
 class TrainingParameters:
     lr_actor = 1e-5
     lr_critic = 1e-5

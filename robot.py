@@ -7,6 +7,7 @@ from utilTypes import Action
 
 odometryDataPointType = Tuple[float, float] # delta x, delta y
 MAPSCALE = 0.05 # each pixel is 0.05m
+FOV_SIZE = (201,201)
 
 # Class implementing the sensor feedback interface for feeding into the planner.
 class Robot:
@@ -16,6 +17,10 @@ class Robot:
     self.currPositionEstimate = (startX,startY,yaw) # in world framne
     self.dt = 0.1 
     self.map = map
+    
+  def reset(self, startX: float, startY: float, yaw: float):
+    self.currPositionActual = (startX,startY,yaw) # keep track of robot current position; no gaussian noise; In world frame
+    self.currPositionEstimate = (startX,startY,yaw) # in world framne
   
   def addGaussianNoise(self, value: float, variance: float = 0.05):
     return value + np.random.normal(0, variance)

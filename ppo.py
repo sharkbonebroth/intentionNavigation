@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from params import TrainingParameters, EnvParameters
+from params import TrainingParameters, EnvParameters, NetParameters
 import gym
 from robot import Robot
-from utilTypes import Action, Trajectory
+from utilTypes import Action, trajectoryType, find_closest_point
 from map import Map
 
 class ReplayBuffer:
@@ -51,6 +51,21 @@ class ActorCritic(nn.Module):
         super().__init__()
         obs_space_shape = product(obs_space_shape)
         action_space_shape = product(action_space_shape)
+        
+        # observation encoder
+        self.conv1 = nn.Conv2d(self.num_channel, NetParameters.NET_SIZE // 4, 3, 1, 1)
+        self.conv1a = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 4, 3, 1, 1)
+        self.conv1b = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 4, 3, 1, 1)
+        self.pool1 = nn.MaxPool2d(2)
+        self.conv2 = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 2, 2, 1, 1)
+        self.conv2a = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE // 2, 2, 1, 1)
+        self.conv2b = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE // 2, 2, 1, 1)
+        self.pool2 = nn.MaxPool2d(2)
+        self.conv3 = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, 3,
+                               1, 0)
+        self.fully_connected_1 = nn.Linear(NetParameters.VECTOR_LEN, NetParameters.INTENTION_SIZE)
+        self.fully_connected_2 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
+        self.fully_connected_3 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
         
         self.critic = nn.Sequential(
             layer_init(nn.Linear(obs_space_shape, 64)),
@@ -101,21 +116,22 @@ class PPO:
     
 class IntentionNavEnv(gym.Env):
     MAX_STEPS = 10000
-    def __init__(self, obs_space_shape : tuple, pathIn : Trajectory, mapIn : Map):
+    def __init__(self, obs_space_shape : tuple, pathsIn : list[trajectoryType], mapIn : Map):
         self.done : bool = False
         self.obs_space_shape : tuple = obs_space_shape
-        self.path : Trajectory = pathIn
+        self.paths : list[trajectoryType] = pathsIn
         self.map : Map = mapIn
         self.robot = Robot(0.0, 0.0, 0.0)
-        self.prevRobotPoseWorld = self.robot.currPositionActual
-        self.intention = self.path.getIntention()
         self.steps = 0
+        self.prevRobotPoseWorld = self.robot.currPositionActual
+        self.intentions = self.paths.getIntention()
+        self.pathId = 0
         
     def step(self, action : np.ndarray) -> tuple[np.ndarray, float, bool, dict]:
-        self.robot.move(Action(action)) #FROM LIYANG: NEED TO PASS IN MAP
+        self.robot.move(Action(action)) 
         
         # Append intention to obs
-        obs = self.robot.getFeedbackImage() #FROM LIYANG: NEED TO PASS IN MAP
+        obs = self.robot.getFeedbackImage()
         
         curRobotPoseWorld = self.robot.getCurrentRobotPosWorld()
         reward = self.get_reward(action, curRobotPoseWorld, self.prevRobotPoseWorld)
@@ -129,8 +145,12 @@ class IntentionNavEnv(gym.Env):
         return obs, reward, done, info
     
     def get_reward(self, action : np.ndarray, curRobotPos, prevRobotPos):
+        
         # Add reward calculation for path following
         return 0.0
+    
+    def reset(self):
+        self.pathId += 1
     
     def is_done(self):
         # Add goal check here
