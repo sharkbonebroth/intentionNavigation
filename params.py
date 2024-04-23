@@ -5,6 +5,11 @@ class NetParameters:
     # Intention Length
     VECTOR_LEN = 1  # [intention, action t-1 maybe?] (Primal vector length ) : [dx, dy, d total, action t-1]
 
+class WandbSettings:
+    ON = False
+    EXPERIMENT_NAME = "Testtarin"
+    EXPERIMENT_PROJECT = "intentionNav"
+
 class EnvParameters:
     OBS_SPACE_SHAPE = NetParameters.FOV_SIZE
     FOV_SIZE=281

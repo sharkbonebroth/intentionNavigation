@@ -109,6 +109,9 @@ class Robot:
     dy = linXDivOmega - linXDivOmega * math.cos(omega * self.dt)
 
     return dx, dy
+  
+  def getRobotPoseWorld(self):
+    return self.currPositionActual
 
   def move(self, action: Action):
     #note: Assume positive angle to be clockwise. This is because we are using image coordinates

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from params import TrainingParameters, EnvParameters, NetParameters
+from params import TrainingParameters, EnvParameters, NetParameters, WandbSettings
 import gymnasium
 from robot import Robot
 from torch.cuda.amp.autocast_mode import autocast
@@ -9,11 +9,12 @@ import torch.nn.functional as F
 from einops import rearrange
 from path import AStarTrajectorySolver
 
-from utilTypes import Action, trajectoryType, find_closest_point, Intention
+from utilTypes import Action, trajectoryType, find_closest_point, Intention, get_distance
 from map import Map
 from typing import Tuple, List
-import json
 from dataLoader import DataLoader
+import wandb
+import time
 
 class ReplayBuffer:
     def __init__(self, num_steps : int, num_envs : int, obs_space_shape : tuple, act_space_shape : tuple):
@@ -39,7 +40,8 @@ class ReplayBuffer:
         b_advantages = self.advantages.reshape(-1)
         b_returns = self.returns.reshape(-1)
         b_values = self.values.reshape(-1)
-        return b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values
+        b_intentions = self.intentions.reshape(-1)
+        return b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values, b_intentions
         
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -67,14 +69,18 @@ class ActorCritic(nn.Module):
         self.conv1 = nn.Conv2d(self.num_channel, NetParameters.NET_SIZE // 4, 3, 1, 1)
         self.conv1a = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 4, 3, 1, 1)
         self.conv1b = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 4, 3, 1, 1)
-        self.pool1 = nn.MaxPool2d(2)
+        self.pool1 = nn.MaxPool2d(5)
         self.conv2 = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 2, 2, 1, 1)
         self.conv2a = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE // 2, 2, 1, 1)
         self.conv2b = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE // 2, 2, 1, 1)
-        self.pool2 = nn.MaxPool2d(2)
+        self.pool2 = nn.MaxPool2d(5)
         self.conv3 = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, 3,
                                1, 0)
-        self.fully_connected_0 = nn.Linear(504*69*69, NetParameters.NET_SIZE-NetParameters.INTENTION_SIZE)
+        self.conv3a = nn.Conv2d(NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, 3,
+                               1, 0)
+        self.conv3b = nn.Conv2d(NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, 3,
+                               1, 0)
+        self.pool3 = nn.MaxPool2d(5)
         self.fully_connected_1 = nn.Linear(NetParameters.VECTOR_LEN, NetParameters.INTENTION_SIZE)
         self.fully_connected_2 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
         self.fully_connected_3 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
@@ -99,8 +105,10 @@ class ActorCritic(nn.Module):
         x_1 = F.relu(self.conv2b(x_1))
         x_1 = self.pool2(x_1)
         x_1 = self.conv3(x_1)
+        x_1 = self.conv3a(x_1)
+        x_1 = self.conv3b(x_1)
+        x_1 = self.pool3(x_1)
         x_1 = F.relu(x_1.view(x_1.size(0), -1))
-        x_1 = self.fully_connected_0(x_1)
         
         # vector input
         x_2 = F.relu(self.fully_connected_1(intention))
@@ -123,11 +131,15 @@ class ActorCritic(nn.Module):
 class PPO:
     def __init__(self, obs_space_shape, action_space_shape):
         self.policy = ActorCritic(obs_space_shape, action_space_shape).to(device)
+        total = 0
+        id = 0
+        for p in self.policy.parameters():
+            print(f"{id} has ", p.numel())
+            total += p.numel()
+            id += 1
+        print("Total # of params ", total)
         self.optimizer = torch.optim.Adam([
             {'params' : self.policy.parameters(), 'lr' : TrainingParameters.lr_actor}
-            # {'params' : self.policy.actor_mean.parameters(), 'lr' : TrainingParameters.lr_actor},
-            # {'params' : self.policy.actor_logstd, 'lr' : TrainingParameters.lr_actor},
-            # {'params' : self.policy.critic.parameters(), 'lr' : TrainingParameters.lr_critic}
         ])
         
         self.obs_space_shape = product(obs_space_shape)
@@ -141,10 +153,8 @@ class PPO:
             action = probs.sample()
         return action , probs.log_prob(action).sum(1) , probs.entropy().sum(1), value
         
-    def get_value(self, state):
-        
-        state = torch.reshape(state, (-1, self.obs_space_shape))
-        value = self.policy.critic(state)
+    def get_value(self, obs, intention):
+        _, _, value = self.policy(obs, intention)
         return value
     
 class IntentionNavEnv(gymnasium.Env):
@@ -160,8 +170,13 @@ class IntentionNavEnv(gymnasium.Env):
         self.intentions = intentionsIn
         self.trainingId = 0
         
-        self.curPath = []
-        self.curIntention = Intention.LEFT
+        self.startPoint = startPoint
+        self.endPoint = endPoint
+        
+        self.curPath = self.paths[self.trainingId]
+        self.curIntention = self.intentions[self.trainingId]
+        
+        self.curBestWaypointId = 0
         
     def getObservations(self):
         return self.robot.getFeedbackImage(), float(self.curIntention)
@@ -172,10 +187,10 @@ class IntentionNavEnv(gymnasium.Env):
         # Append intention to obs
         obs, intention = self.getObservations()
         
-        curRobotPoseWorld = (0.0, 0.0, 0.0)
+        curRobotPoseWorld = self.robot.getRobotPoseWorld()
         reward = self.get_reward(action, curRobotPoseWorld, self.prevRobotPoseWorld)
         
-        done = self.is_done()
+        done = self.is_done(curRobotPoseWorld)
         self.prevRobotPoseWorld = curRobotPoseWorld
         
         info = dict()
@@ -184,20 +199,25 @@ class IntentionNavEnv(gymnasium.Env):
         return obs, intention, reward, done, info
     
     def get_reward(self, action : np.ndarray, curRobotPos, prevRobotPos):
+        closestWaypointId = find_closest_point(curRobotPos[:2], self.paths)
+        reward = closestWaypointId - self.curBestWaypointId
+        reward *= 0.1
         
-        # Add reward calculation for path following
-        return 0.0
+        if closestWaypointId > self.curBestWaypointId:
+            self.curBestWaypointId = closestWaypointId
+        return reward
     
     def reset(self):
-        if self.trainingId >= len(self.paths):
-            return np.zeros((640,480))
-        self.curPath = self.paths[self.trainingId]
-        self.curIntention = self.intentions[self.trainingId]
-        self.trainingId +=1
+        self.robot.reset(*self.startPoint)
+        # if self.trainingId >= len(self.paths):
+        #     return np.zeros((640,480))
+        # self.trainingId +=1
+        # self.curPath = self.paths[self.trainingId]
+        # self.curIntention = self.intentions[self.trainingId]
     
-    def is_done(self):
-        # Add goal check here
-        
+    def is_done(self, curRobotPoseWorld):
+        if get_distance(curRobotPoseWorld, self.endPoint) < 0.1:
+            return True
         if self.steps >= IntentionNavEnv.MAX_STEPS:
             return True
         return False
@@ -262,6 +282,13 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer):
         buffer.rewards[step] = torch.tensor(reward).to(device).view(-1)
         next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
         next_intention = torch.tensor(next_intention).to(device).view(-1)
+        
+        # for item in info:
+        #     if "episode" in item.keys():
+        #         print(f"global_step={global_step}, episodic_return={item['episode']['r']}")
+        #         wandb.log("charts/episodic_return", item["episode"]["r"], global_step)
+        #         wandb.log("charts/episodic_length", item["episode"]["l"], global_step)
+        #         break
     return next_obs, next_intention, next_done
         
 def get_device() -> torch.device:
@@ -296,6 +323,15 @@ if __name__ == "__main__":
     device = get_device()
     
     # TODO (Nielsen): Log to wandb
+    if WandbSettings.ON:
+        wandb_id = wandb.util.generate_id()
+        wandb.init(project=WandbSettings.EXPERIMENT_PROJECT,
+                    name=WandbSettings.EXPERIMENT_NAME,
+                    id=wandb_id,
+                    resume='allow')
+        print('id is:{}'.format(wandb_id))
+        print('Launching wandb...\n')
+
     # TODO (Nielsen): Parallelize across multiple environments
     
     batch_size = TrainingParameters.N_STEPS * TrainingParameters.N_ENVS
@@ -307,6 +343,7 @@ if __name__ == "__main__":
     num_updates = TrainingParameters.TOTAL_TIMESTEPS // batch_size
     target_kl = None
     global_step = 0
+    start_time = time.time()
     for update in range(1, num_updates+1):
         global_step += TrainingParameters.N_ENVS
         
@@ -320,7 +357,7 @@ if __name__ == "__main__":
 
         #bootstrap reward if not done
         with torch.no_grad():
-            next_value = ppo.get_value(next_obs).reshape(1,-1)
+            next_value = ppo.get_value(next_obs, next_intention).reshape(1,-1)
             advantages = torch.zeros_like(buffer.rewards).to(device)
             lastgaelam = 0
             for t in reversed(range(TrainingParameters.N_STEPS)):
@@ -334,7 +371,7 @@ if __name__ == "__main__":
                 buffer.advantages[t] = lastgaelam = delta + TrainingParameters.GAMMA * TrainingParameters.LAM * nextnonterminal * lastgaelam
             returns = buffer.advantages + buffer.values
     
-        b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values = buffer.flatten_batch()
+        b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values, b_intentions = buffer.flatten_batch()
     
         # Optimizing network
         batch_indices = np.arange(batch_size)
@@ -346,7 +383,7 @@ if __name__ == "__main__":
                 minibatch_indices = batch_indices[start:end]
                 
                 _, newlogprob, entropy, newvalue = ppo.get_action_and_value(
-                    b_obs[minibatch_indices], b_actions[minibatch_indices]
+                    b_obs[minibatch_indices], b_intentions[minibatch_indices], b_actions[minibatch_indices]
                 )
                 logratio = newlogprob - b_logprobs[minibatch_indices]
                 ratio = logratio.exp()
@@ -390,6 +427,22 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+        
+        if WandbSettings.ON:
+            print("Logging here")
+            wandb.log({"charts/learning_rate" : ppo.optimizer.param_groups[0]["lr"]}, global_step)
+            wandb.log({"losses/value_loss" : value_loss.item()}, global_step)
+            wandb.log({"losses/policy_loss" : pg_loss.item()}, global_step)
+            wandb.log({"losses/entropy" : entropy_loss.item()}, global_step)
+            wandb.log({"losses/old_approx_kl" : old_approx_kl.item()}, global_step)
+            wandb.log({"losses/approx_kl" : approx_kl.item()}, global_step)
+            wandb.log({"losses/clipfrac" : np.mean(clipfracs)}, global_step)
+            wandb.log({"losses/explained_variance" : explained_var}, global_step)
+            print("SPS:", int(global_step / (time.time() - start_time)))
+            wandb.log({"charts/SPS" : int(global_step / (time.time() - start_time))}, global_step)
+    
+    if WandbSettings.ON:
+        wandb.finish()
                 
         
                 

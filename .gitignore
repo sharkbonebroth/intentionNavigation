@@ -3,3 +3,5 @@ __pycache__
 maps/
 labelledData/
 test.py
+
+wandb/
