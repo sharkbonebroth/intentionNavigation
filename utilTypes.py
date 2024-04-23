@@ -4,6 +4,9 @@ from typing import Tuple, List
 
 trajectoryType = List[Tuple[float, float]]
 
+def get_distance(pt1, pt2):
+    return np.linalg.norm(np.array(pt1[:2]) - np.array(pt2[:2]))
+
 def find_closest_point(point, traj : trajectoryType) -> int:
     closestId = 0
     closestDist = float('inf')
