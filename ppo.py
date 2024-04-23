@@ -4,9 +4,16 @@ import numpy as np
 from params import TrainingParameters, EnvParameters, NetParameters
 import gymnasium
 from robot import Robot
-from utilTypes import Action, trajectoryType, find_closest_point
+from torch.cuda.amp.autocast_mode import autocast
+import torch.nn.functional as F
+from einops import rearrange
+from path import AStarTrajectorySolver
+
+from utilTypes import Action, trajectoryType, find_closest_point, Intention
 from map import Map
 from typing import Tuple, List
+import json
+from dataLoader import DataLoader
 
 class ReplayBuffer:
     def __init__(self, num_steps : int, num_envs : int, obs_space_shape : tuple, act_space_shape : tuple):
@@ -17,6 +24,7 @@ class ReplayBuffer:
         self.advantages = torch.zeros(batch_shape).to(device)
         self.returns = torch.zeros(batch_shape).to(device)
         self.values = torch.zeros(batch_shape).to(device)
+        self.intentions = torch.zeros(batch_shape).to(device)
         
         self.rewards = torch.zeros(batch_shape).to(device)
         self.dones = torch.zeros(batch_shape).to(device)
@@ -53,6 +61,8 @@ class ActorCritic(nn.Module):
         obs_space_shape = product(obs_space_shape)
         action_space_shape = product(action_space_shape)
         
+        self.num_channel = 3
+        
         # observation encoder
         self.conv1 = nn.Conv2d(self.num_channel, NetParameters.NET_SIZE // 4, 3, 1, 1)
         self.conv1a = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 4, 3, 1, 1)
@@ -64,75 +74,105 @@ class ActorCritic(nn.Module):
         self.pool2 = nn.MaxPool2d(2)
         self.conv3 = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, 3,
                                1, 0)
+        
         self.fully_connected_1 = nn.Linear(NetParameters.VECTOR_LEN, NetParameters.INTENTION_SIZE)
         self.fully_connected_2 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
         self.fully_connected_3 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
         
-        self.critic = nn.Sequential(
-            layer_init(nn.Linear(obs_space_shape, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 1), std=1.)
-        )
-        
-        self.actor_mean = nn.Sequential(
-            layer_init(nn.Linear(obs_space_shape, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64,64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, action_space_shape), std=0.01)
-        )
+        self.policy_layer = layer_init(nn.Linear(NetParameters.NET_SIZE, action_space_shape), std=0.01)
+        self.value_layer = layer_init(nn.Linear(NetParameters.NET_SIZE, 1), std=1.)
         
         self.actor_logstd = nn.Parameter(torch.zeros(1, action_space_shape))
+        
+    @autocast()
+    def forward(self, obs, intention):
+        """run neural network"""
+        obs = torch.reshape(obs, (-1, self.num_channel, EnvParameters.FOV_SIZE, EnvParameters.FOV_SIZE))
+        intention = torch.reshape(intention, (-1, NetParameters.VECTOR_LEN))
+        # matrix input
+        x_1 = F.relu(self.conv1(obs))
+        x_1 = F.relu(self.conv1a(x_1))
+        x_1 = F.relu(self.conv1b(x_1))
+        x_1 = self.pool1(x_1)
+        x_1 = F.relu(self.conv2(x_1))
+        x_1 = F.relu(self.conv2a(x_1))
+        x_1 = F.relu(self.conv2b(x_1))
+        x_1 = self.pool2(x_1)
+        x_1 = self.conv3(x_1)
+        x_1 = F.relu(x_1.view(x_1.size(0), -1))
+        
+        # vector input
+        x_2 = F.relu(self.fully_connected_1(intention))
+        
+        print(x_1.shape)
+        print(x_2.shape)
+        
+        x_3 = torch.cat((x_1, x_2), -1)
+        h1 = F.relu(self.fully_connected_2(x_3))
+        h1 = self.fully_connected_3(h1)
+        h2 = F.relu(h1 + x_3)
+        h2 = h2.view(h2.shape[0], h2.shape[1], 1, 1)
+        
+        x = rearrange(h2, 'b c h w -> b (h w) c')
+        
+        x = torch.reshape(x, (-1, NetParameters.NET_SIZE))
+        
+        actor_mean = self.policy_layer(x)
+        actor_logstd = self.actor_logtsd(actor_mean)
+        value = self.value_layer(x)
+        return actor_mean, actor_logstd, value
 
 class PPO:
     def __init__(self, obs_space_shape, action_space_shape):
         self.policy = ActorCritic(obs_space_shape, action_space_shape).to(device)
         self.optimizer = torch.optim.Adam([
-            {'params' : self.policy.actor_mean.parameters(), 'lr' : TrainingParameters.lr_actor},
-            {'params' : self.policy.actor_logstd, 'lr' : TrainingParameters.lr_actor},
-            {'params' : self.policy.critic.parameters(), 'lr' : TrainingParameters.lr_critic}
+            {'params' : self.policy.parameters(), 'lr' : TrainingParameters.lr_actor}
+            # {'params' : self.policy.actor_mean.parameters(), 'lr' : TrainingParameters.lr_actor},
+            # {'params' : self.policy.actor_logstd, 'lr' : TrainingParameters.lr_actor},
+            # {'params' : self.policy.critic.parameters(), 'lr' : TrainingParameters.lr_critic}
         ])
         
         self.obs_space_shape = product(obs_space_shape)
         self.action_space_shape = product(action_space_shape)
         
-    def get_action_and_value(self, state : np.ndarray , action=None):
-        state = torch.reshape(state, (-1, self.obs_space_shape))
-        # logits are unnormalized action probs
-        action_mean = self.policy.actor_mean(state)
-        action_logstd = self.policy.actor_logstd.expand_as(action_mean)
+    def get_action_and_value(self, obs, intention, action=None):
+        action_mean, action_logstd, value = self.policy(obs, intention)
         action_std = torch.exp(action_logstd)
         probs = torch.distributions.Normal(action_mean, action_std)
         if action is None:
             action = probs.sample()
-        value = self.get_value(state)
         return action , probs.log_prob(action).sum(1) , probs.entropy().sum(1), value
         
     def get_value(self, state):
+        
         state = torch.reshape(state, (-1, self.obs_space_shape))
         value = self.policy.critic(state)
         return value
     
 class IntentionNavEnv(gymnasium.Env):
     MAX_STEPS = 10000
-    def __init__(self, obs_space_shape : Tuple, pathsIn : List[trajectoryType], mapIn : Map):
+    def __init__(self, obs_space_shape : Tuple, pathsIn : List[trajectoryType], intentionsIn : List[Intention], mapIn : Map, startPoint, endPoint):
         self.done : bool = False
         self.obs_space_shape : tuple = obs_space_shape
         self.paths : List[trajectoryType] = pathsIn
         self.map : Map = mapIn
-        self.robot = Robot(0.0, 0.0, 0.0)
+        self.robot = Robot(map=mapIn, startX=startPoint[0], startY=startPoint[1], yaw=startPoint[2])
         self.steps = 0
         self.prevRobotPoseWorld = self.robot.currPositionActual
-        self.intentions = self.paths.getIntention()
-        self.pathId = 0
+        self.intentions = intentionsIn
+        self.trainingId = 0
+        
+        self.curPath = []
+        self.curIntention = Intention.LEFT
+        
+    def getObservations(self):
+        return self.robot.getFeedbackImage(), float(self.curIntention)
         
     def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
         self.robot.move(Action(action)) 
         
         # Append intention to obs
-        obs = self.robot.getFeedbackImage()
+        obs, intention = self.getObservations()
         
         curRobotPoseWorld = self.robot.getCurrentRobotPosWorld()
         reward = self.get_reward(action, curRobotPoseWorld, self.prevRobotPoseWorld)
@@ -143,7 +183,7 @@ class IntentionNavEnv(gymnasium.Env):
         info = dict()
         
         self.steps += 1
-        return obs, reward, done, info
+        return obs, intention, reward, done, info
     
     def get_reward(self, action : np.ndarray, curRobotPos, prevRobotPos):
         
@@ -151,7 +191,11 @@ class IntentionNavEnv(gymnasium.Env):
         return 0.0
     
     def reset(self):
-        self.pathId += 1
+        if self.trainingId >= len(self.paths):
+            return np.zeros((640,480))
+        self.curPath = self.paths[self.trainingId]
+        self.curIntention = self.intentions[self.trainingId]
+        self.trainingId +=1
     
     def is_done(self):
         # Add goal check here
@@ -195,30 +239,32 @@ class DummyIntentionNavEnv(gymnasium.Env):
         TODO: Reset the environment to default state and returns ndarray with same shape as obs
         """
         return torch.zeros(self.obs_space_shape)
-    
-def get_env():
-    return DummyIntentionNavEnv(EnvParameters.OBS_SPACE_SHAPE)
 
 def rollout(env : gymnasium.Env, buffer : ReplayBuffer):
-    next_obs = torch.Tensor(env.reset()).to(device)
+    env.reset()
+    obs, intention = env.getObservations()
+    next_obs = torch.Tensor(obs).to(device)
+    next_intention = torch.tensor(intention).to(device).view(-1)
     next_done = torch.zeros(TrainingParameters.N_ENVS).to(device)
     
     for step in range(TrainingParameters.N_STEPS):
         buffer.observations[step] = next_obs
+        buffer.intentions[step] = next_intention
         buffer.dones[step] = next_done
         
         with torch.no_grad():
-            action, logprob, _, value = ppo.get_action_and_value(next_obs)
+            action, logprob, _, value = ppo.get_action_and_value(next_obs, next_intention)
             buffer.values[step] = value.flatten()
         buffer.actions[step] = action
         buffer.logprobs[step] = logprob
         
         # Gym part
-        next_obs, reward, done, info = env.step(action.cpu().numpy())
+        next_obs, next_intention, reward, done, info = env.step(action.cpu().numpy())
         done = np.array([done])
         buffer.rewards[step] = torch.tensor(reward).to(device).view(-1)
         next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
-    return next_obs, next_done
+        next_intention = torch.Tensor(next_intention).to(device).view(-1)
+    return next_obs, next_intention, next_done
         
 def get_device() -> torch.device:
     device = torch.device('cpu')
@@ -231,6 +277,24 @@ def get_device() -> torch.device:
     print("============================================================================================")
     return device
         
+def get_env():
+    # return DummyIntentionNavEnv(EnvParameters.OBS_SPACE_SHAPE)
+    dataLoader = DataLoader("maps", "labelledData") # mapdir, labelledDataDir
+    paths = []
+    intentions = []
+    trainingData, map = dataLoader.getLabelledDataAndMap()
+    paths.append(trainingData.trajectory)
+    intentions.append(trainingData.direction)
+    
+    # Clockwise positive for yaw
+    startPoint = trainingData.startPoint
+    endPoint = trainingData.endPoint
+    
+    robotMap = map
+    
+    print(startPoint, endPoint, trainingData.direction)
+    return IntentionNavEnv(NetParameters.FOV_SIZE, pathsIn=paths, intentionsIn=intentions, mapIn=robotMap, startPoint=startPoint, endPoint=endPoint)
+
 if __name__ == "__main__":
     device = get_device()
     
@@ -255,7 +319,7 @@ if __name__ == "__main__":
             ppo.optimizer.param_groups[0]["lr"] = lrnow
             
         #policy rollout
-        next_obs, next_done = rollout(env, buffer)
+        next_obs, next_intention, next_done = rollout(env, buffer)
 
         #bootstrap reward if not done
         with torch.no_grad():

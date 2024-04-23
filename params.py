@@ -1,11 +1,13 @@
 class NetParameters:
-    ENV_SIZE = 512
+    NET_SIZE = 512
     INTENTION_SIZE = 8
+    FOV_SIZE = (281,281,3)
     # Intention Length
-    VECTOR_LEN = 2  # [intention, action t-1] (Primal vector length ) : [dx, dy, d total, action t-1]
+    VECTOR_LEN = 1  # [intention, action t-1 maybe?] (Primal vector length ) : [dx, dy, d total, action t-1]
 
 class EnvParameters:
-    OBS_SPACE_SHAPE = (5, 5)
+    OBS_SPACE_SHAPE = NetParameters.FOV_SIZE
+    FOV_SIZE=281
     ACT_SPACE_SHAPE = (2,)
     
 class TrainingParameters:

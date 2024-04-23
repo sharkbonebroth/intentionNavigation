@@ -14,6 +14,7 @@ import random
 from pathlib import Path
 from typing import List, Tuple
 from dataLoader import TrainingDataPoint
+import json
 
 parser = argparse.ArgumentParser(
     prog = "main.py",
@@ -191,6 +192,15 @@ def confirmStartAndEndPointsCallback(direction: int): # -1: left, 0: straight, 1
         trajectoryConvertedToDist
       )
     )
+    lastpoint = TrainingDataPoints[-1]
+    data = {
+      'start' : lastpoint.startPoint,
+      'end' : lastpoint.endPoint,
+      'intention' : lastpoint.direction,
+      'path' : lastpoint.trajectory
+    }
+    with open('data.json', 'w', encoding='utf-8') as f:
+      json.dump(data, f, ensure_ascii=False, indent=4)
     resetImgNpArray()
     startPoint = None
     endPoint = None

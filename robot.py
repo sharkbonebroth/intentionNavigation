@@ -54,7 +54,7 @@ class Robot:
     # Crop the lidar reading image out
     lidarRangeCroppedPx = math.floor(LIDARRANGE/MAPSCALE)
     lidarRangeUncroppedPx = int(np.ceil(lidarRangeCroppedPx * math.sqrt(2))) #5m vision range, account for potential cropping later
-    lidarImgUncroppedSize = 2 * lidarRangeUncroppedPx + 1
+    lidarImgUncroppedSize = int(2 * lidarRangeUncroppedPx + 1)
     lidarImgUncropped = np.zeros((lidarImgUncroppedSize, lidarImgUncroppedSize, 3), dtype=np.uint8)
     xActualImgCoord = int(xActual/MAPSCALE)
     yActualImgCoord = int(yActual/MAPSCALE)
