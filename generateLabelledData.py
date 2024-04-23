@@ -181,13 +181,15 @@ def confirmStartAndEndPointsCallback(direction: int): # -1: left, 0: straight, 1
 
     startPointConvertedToDist = (startPoint[0] * MAPSCALE, startPoint[1] * MAPSCALE, startPoint[2])
     endPointConvertedToDist = (endPoint[0] * MAPSCALE, endPoint[1] * MAPSCALE, endPoint[2])
+    trajectoryConvertedToDist = [(pt[0] * MAPSCALE, pt[1] * MAPSCALE) for pt in trajectory]
+    print(trajectoryConvertedToDist)
     TrainingDataPoints.append(
       TrainingDataPoint(
         startPointConvertedToDist,
         endPointConvertedToDist,
         direction,
         map.name,
-        trajectory
+        trajectoryConvertedToDist
       )
     )
     resetImgNpArray()
