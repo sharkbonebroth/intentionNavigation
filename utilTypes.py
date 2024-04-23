@@ -1,7 +1,8 @@
 import numpy as np
 import enum
+from typing import Tuple, List
 
-trajectoryType = list[tuple[float, float]]
+trajectoryType = List[Tuple[float, float]]
 
 def find_closest_point(point, traj : trajectoryType) -> int:
     closestId = 0

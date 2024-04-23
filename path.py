@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Tuple, List
+from typing import Tuple
 from map import Map
 from scipy import ndimage
 import heapq
@@ -18,7 +18,7 @@ class AStarTrajectorySolver:
   def __init__(self):
     pass
 
-  def expandNode(self, node: AStarNode, mapGrid: np.ndarray) -> List[AStarNode]:
+  def expandNode(self, node: AStarNode, mapGrid: np.ndarray) -> list[AStarNode]:
     childrenNodes = []
 
     for i in [-1, 0, 1]:

@@ -11,6 +11,8 @@ import pickle
 import math
 import copy
 import random
+from pathlib import Path
+from typing import List, Tuple
 
 parser = argparse.ArgumentParser(
     prog = "main.py",
@@ -18,7 +20,7 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument("-mapDir", type = str, default = "maps", help = "Directory to save generated maps to")
-parser.add_argument("-labelledDataPath", type = str, default = "labelledData")
+parser.add_argument("-labelledDataDir", type = str, default = "labelledData")
 args = None
 
 class TrainingDataPoint():
@@ -177,6 +179,7 @@ def confirmStartAndEndPointsCallback(direction: int): # -1: left, 0: straight, 1
     if not mapSaved:
       mapName = time.strftime('%Y%m%d_%H%M%S')
       map.setName(mapName)
+      Path(args.mapDir).mkdir(parents=True, exist_ok=True)
       savePath = f"{args.mapDir}/{mapName}"
       map.saveToFile(savePath)
       mapSaved = True
@@ -218,7 +221,10 @@ def cancelLabelling():
 def finishLabelling(eventOrigin):
   global TrainingDataPoints
   print("Saving labelled data...")
-  pickle.dump(TrainingDataPoints, open(args.labelledDataPath, 'wb'))
+  labelledDataFileName = time.strftime('%Y%m%d_%H%M%S')
+  Path(args.labelledDataDir).mkdir(parents=True, exist_ok=True)
+  savePath = f"{args.labelledDataDir}/{labelledDataFileName}"
+  pickle.dump(TrainingDataPoints, open(savePath, 'wb'))
   
   app.withdraw()
   sys.exit()

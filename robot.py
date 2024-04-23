@@ -7,7 +7,8 @@ from utilTypes import Action
 
 odometryDataPointType = Tuple[float, float] # delta x, delta y
 MAPSCALE = 0.05 # each pixel is 0.05m
-FOV_SIZE = (201,201)
+LIDARRANGE = 5
+FOV_SIZE = (201,201) # LIDARRANGE / MAPSCALE * 2 + 1
 
 # Class implementing the sensor feedback interface for feeding into the planner.
 class Robot:
@@ -64,7 +65,6 @@ class Robot:
     # rotate and Crop the uncropped lidar image in the center
     lidarImgUncroppedRotated = ndimage.rotate(lidarImgUncropped, yawActual, reshape=True)
     centerX = lidarRangeUncroppedPx + 1
-    centerY = centerX
 
     startX = centerX - lidarRangeCroppedPx
     endX = centerX + lidarRangeCroppedPx
@@ -77,18 +77,6 @@ class Robot:
   #get the latest n odometry points
   def getNLatestOdometries(self, n: int):
     return self.odometry[len(self.odometry)-n:]
-
-  def getRotationMatrix(self, angle:float):
-    angle_rad = np.deg2rad(angle)
-    return np.array([[np.cos(angle_rad), -np.sin(angle_rad)], [np.sin(angle_rad), np.cos(angle_rad)]])
-  
-  def isLegalMovement(self, coord):
-    map = self.getMap()
-    x, y = coord
-    h, w = map.shape[:2]
-    inBound: bool = (0<=x<w) and (0<=y<h)
-    collisionFree: bool = (map[y,x,:]==np.array([255,255,255]))
-    return (inBound and collisionFree)
 
   def hasCrashedIntoWall(self) -> bool:
     mapGrid = self.map.mapGrid

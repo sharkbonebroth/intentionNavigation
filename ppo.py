@@ -6,6 +6,7 @@ import gym
 from robot import Robot
 from utilTypes import Action, trajectoryType, find_closest_point
 from map import Map
+from typing import Tuple, list
 
 class ReplayBuffer:
     def __init__(self, num_steps : int, num_envs : int, obs_space_shape : tuple, act_space_shape : tuple):
@@ -116,7 +117,7 @@ class PPO:
     
 class IntentionNavEnv(gym.Env):
     MAX_STEPS = 10000
-    def __init__(self, obs_space_shape : tuple, pathsIn : list[trajectoryType], mapIn : Map):
+    def __init__(self, obs_space_shape : Tuple, pathsIn : list[trajectoryType], mapIn : Map):
         self.done : bool = False
         self.obs_space_shape : tuple = obs_space_shape
         self.paths : list[trajectoryType] = pathsIn
@@ -127,7 +128,7 @@ class IntentionNavEnv(gym.Env):
         self.intentions = self.paths.getIntention()
         self.pathId = 0
         
-    def step(self, action : np.ndarray) -> tuple[np.ndarray, float, bool, dict]:
+    def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
         self.robot.move(Action(action)) 
         
         # Append intention to obs
