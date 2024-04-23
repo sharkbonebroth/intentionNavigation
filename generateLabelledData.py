@@ -13,6 +13,7 @@ import copy
 import random
 from pathlib import Path
 from typing import List, Tuple
+from dataLoader import TrainingDataPoint
 
 parser = argparse.ArgumentParser(
     prog = "main.py",
@@ -22,14 +23,6 @@ parser = argparse.ArgumentParser(
 parser.add_argument("-mapDir", type = str, default = "maps", help = "Directory to save generated maps to")
 parser.add_argument("-labelledDataDir", type = str, default = "labelledData")
 args = None
-
-class TrainingDataPoint():
-  def __init__(self, startPoint, endPoint, direction, mapName, trajectory):
-    self.startPoint = startPoint
-    self.endPoint = endPoint
-    self.direction = direction
-    self.mapName = mapName
-    self.trajectory = trajectory
 
 class DataLabelingStateMachine():
   def __init__(self):
