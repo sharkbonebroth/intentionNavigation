@@ -7,17 +7,20 @@ from utilTypes import Action
 
 odometryDataPointType = Tuple[float, float] # delta x, delta y
 MAPSCALE = 0.05 # each pixel is 0.05m
-LIDARRANGE = 5
-FOV_SIZE = (201,201) # LIDARRANGE / MAPSCALE * 2 + 1
+LIDARRANGE = 7
+FOV_SIDE_SIZE = int(LIDARRANGE/MAPSCALE + 1)
+FOV_SIZE = (FOV_SIDE_SIZE, FOV_SIDE_SIZE) # LIDARRANGE / MAPSCALE * 2 + 1
 
 # Class implementing the sensor feedback interface for feeding into the planner.
 class Robot:
-  def __init__(self, startX: float, startY: float, yaw: float, map: Map):
+  def __init__(self, startX: float, startY: float, yaw: float, map: Map, numOdomToPlot: int = 200, noiseVariance: float = 0.005):
     self.odometry = [] # Odometry with gaussian noise added; In world frame
     self.currPositionActual = (startX,startY,yaw) # keep track of robot current position; no gaussian noise; In world frame
     self.currPositionEstimate = (startX,startY,yaw) # in world framne
     self.dt = 0.1 
     self.map = map
+    self.numOdomToPlot = numOdomToPlot
+    self.noiseVariance = noiseVariance
     
   def reset(self, startX: float, startY: float, yaw: float):
     self.currPositionActual = (startX,startY,yaw) # keep track of robot current position; no gaussian noise; In world frame
@@ -36,7 +39,7 @@ class Robot:
     # Plot the odometry estimates on the color mapgrid
     xBeingPlotted = xActual
     yBeingPlotted = yActual
-    odomToPlot = self.getNLatestOdometries(100)
+    odomToPlot = self.getNLatestOdometries(self.numOdomToPlot)
     for odom in odomToPlot: # loop will miss the last one but wtv
       dx, dy = odom
 
@@ -45,38 +48,40 @@ class Robot:
 
       mapWithOdomPlottedWorldFrame[yBeingPlottedDiscretized][xBeingPlottedDiscretized] = np.array([255,0,0])
 
-      xBeingPlotted = xActual - dx
-      yBeingPlotted = yActual - dy  
+      xBeingPlotted = xBeingPlotted - dx
+      yBeingPlotted = yBeingPlotted - dy  
 
     # Crop the lidar reading image out
-    lidarRangeCroppedPx = math.floor(5/MAPSCALE)
-    lidarRangeUncroppedPx = np.ceil(lidarRangeCroppedPx * math.sqrt(2)) #5m vision range, account for potential cropping later
+    lidarRangeCroppedPx = math.floor(LIDARRANGE/MAPSCALE)
+    lidarRangeUncroppedPx = int(np.ceil(lidarRangeCroppedPx * math.sqrt(2))) #5m vision range, account for potential cropping later
     lidarImgUncroppedSize = 2 * lidarRangeUncroppedPx + 1
-    lidarImgUncropped = np.zeros(lidarImgUncroppedSize, lidarImgUncroppedSize, 3)
+    lidarImgUncropped = np.zeros((lidarImgUncroppedSize, lidarImgUncroppedSize, 3), dtype=np.uint8)
     xActualImgCoord = int(xActual/MAPSCALE)
     yActualImgCoord = int(yActual/MAPSCALE)
     for yCoordLidarImg, yCoordOdomImg in enumerate(range(yActualImgCoord - lidarRangeUncroppedPx, yActualImgCoord + lidarRangeUncroppedPx + 1)):
-      for XxoordLidarImg, xCoordOdomImg in enumerate(range(xActualImgCoord - lidarRangeUncroppedPx, xActualImgCoord + lidarRangeUncroppedPx + 1)):
+      for XCoordLidarImg, xCoordOdomImg in enumerate(range(xActualImgCoord - lidarRangeUncroppedPx, xActualImgCoord + lidarRangeUncroppedPx + 1)):
         if yCoordOdomImg < 0 or yCoordOdomImg >= self.map.height or xCoordOdomImg < 0 or xCoordOdomImg >= self.map.width:
           continue
         else:
-          lidarImgUncropped[yCoordLidarImg][XxoordLidarImg] = mapWithOdomPlottedWorldFrame[yCoordOdomImg][xCoordOdomImg]
+          lidarImgUncropped[yCoordLidarImg][XCoordLidarImg] = mapWithOdomPlottedWorldFrame[yCoordOdomImg][xCoordOdomImg]
 
     # rotate and Crop the uncropped lidar image in the center
-    lidarImgUncroppedRotated = ndimage.rotate(lidarImgUncropped, yawActual, reshape=True)
+    lidarImgUncroppedRotated = ndimage.rotate(lidarImgUncropped, yawActual*180/np.pi, reshape=False)
     centerX = lidarRangeUncroppedPx + 1
 
     startX = centerX - lidarRangeCroppedPx
-    endX = centerX + lidarRangeCroppedPx
+    endX = centerX + lidarRangeCroppedPx + 1
     startY = startX
     endY = endX
     
     lidarImg = lidarImgUncroppedRotated[startY:endY, startX:endX]
     return lidarImg
-
+    
   #get the latest n odometry points
   def getNLatestOdometries(self, n: int):
-    return self.odometry[len(self.odometry)-n:]
+    if n > len(self.odometry):
+      n = len(self.odometry)
+    return self.odometry[::-1][:n]
 
   def hasCrashedIntoWall(self) -> bool:
     mapGrid = self.map.mapGrid
@@ -97,6 +102,8 @@ class Robot:
     return self.map.inflationZoneGrid[yDiscretized][xDiscretized]
 
   def getDisplacementRobotFrame(self, linX, omega):
+    if omega == 0:
+      return linX * self.dt, 0
     linXDivOmega = linX/omega
     dx = linXDivOmega * math.sin(omega * self.dt)
     dy = linXDivOmega - linXDivOmega * math.cos(omega * self.dt)
@@ -105,7 +112,7 @@ class Robot:
 
   def move(self, action: Action):
     #note: Assume positive angle to be clockwise. This is because we are using image coordinates
-    linX, omega = action.get_as_ndarray() #action is in robot frame
+    linX, omega = action.lin_x, action.ang_z #action is in robot frame
     dYaw = omega * self.dt
     dxRobotFrame, dyRobotFrame = self.getDisplacementRobotFrame(linX, omega)    
     
@@ -120,9 +127,9 @@ class Robot:
 
     # Update noisy estimates
     prevXWorldEstimate, prevYWorldEstimate, prevYawWorldEstimate = self.currPositionEstimate
-    dxRobotFrameNoised = self.addGaussianNoise(dxRobotFrame, 0.05)
-    dyRobotFrameNoised = self.addGaussianNoise(dyRobotFrame, 0.05)
-    dYawNoised = self.addGaussianNoise(dYaw, 0.05)
+    dxRobotFrameNoised = self.addGaussianNoise(dxRobotFrame, self.noiseVariance)
+    dyRobotFrameNoised = self.addGaussianNoise(dyRobotFrame, self.noiseVariance)
+    dYawNoised = self.addGaussianNoise(dYaw, self.noiseVariance)
     dxWorldFrameEstimate = dxRobotFrameNoised * math.cos(prevYawWorldEstimate) - dyRobotFrameNoised * math.sin(prevYawWorldEstimate)
     dyWorldFrameEstimate = dxRobotFrameNoised * math.sin(prevYawWorldEstimate) + dyRobotFrameNoised * math.cos(prevYawWorldEstimate)
     currXWorldEstimate = prevXWorldEstimate + dxWorldFrameEstimate

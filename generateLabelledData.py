@@ -179,12 +179,12 @@ def confirmStartAndEndPointsCallback(direction: int): # -1: left, 0: straight, 1
 
     print("New start and end points confirmed")
 
-    startPointAngleFlipped = (startPoint[0], startPoint[1], startPoint[2])
-    endPointAngleFlipped = (endPoint[0], endPoint[1], endPoint[2])
+    startPointConvertedToDist = (startPoint[0] * MAPSCALE, startPoint[1] * MAPSCALE, startPoint[2])
+    endPointConvertedToDist = (endPoint[0] * MAPSCALE, endPoint[1] * MAPSCALE, endPoint[2])
     TrainingDataPoints.append(
       TrainingDataPoint(
-        startPointAngleFlipped,
-        endPointAngleFlipped,
+        startPointConvertedToDist,
+        endPointConvertedToDist,
         direction,
         map.name,
         trajectory
