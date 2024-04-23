@@ -74,7 +74,7 @@ class ActorCritic(nn.Module):
         self.pool2 = nn.MaxPool2d(2)
         self.conv3 = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, 3,
                                1, 0)
-        
+        self.fully_connected_0 = nn.Linear(504*69*69, NetParameters.NET_SIZE-NetParameters.INTENTION_SIZE)
         self.fully_connected_1 = nn.Linear(NetParameters.VECTOR_LEN, NetParameters.INTENTION_SIZE)
         self.fully_connected_2 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
         self.fully_connected_3 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
@@ -100,12 +100,10 @@ class ActorCritic(nn.Module):
         x_1 = self.pool2(x_1)
         x_1 = self.conv3(x_1)
         x_1 = F.relu(x_1.view(x_1.size(0), -1))
+        x_1 = self.fully_connected_0(x_1)
         
         # vector input
         x_2 = F.relu(self.fully_connected_1(intention))
-        
-        print(x_1.shape)
-        print(x_2.shape)
         
         x_3 = torch.cat((x_1, x_2), -1)
         h1 = F.relu(self.fully_connected_2(x_3))
@@ -118,7 +116,7 @@ class ActorCritic(nn.Module):
         x = torch.reshape(x, (-1, NetParameters.NET_SIZE))
         
         actor_mean = self.policy_layer(x)
-        actor_logstd = self.actor_logtsd(actor_mean)
+        actor_logstd = self.actor_logstd.expand_as(actor_mean)
         value = self.value_layer(x)
         return actor_mean, actor_logstd, value
 
@@ -169,12 +167,12 @@ class IntentionNavEnv(gymnasium.Env):
         return self.robot.getFeedbackImage(), float(self.curIntention)
         
     def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
-        self.robot.move(Action(action)) 
+        self.robot.move(Action(*action)) 
         
         # Append intention to obs
         obs, intention = self.getObservations()
         
-        curRobotPoseWorld = self.robot.getCurrentRobotPosWorld()
+        curRobotPoseWorld = (0.0, 0.0, 0.0)
         reward = self.get_reward(action, curRobotPoseWorld, self.prevRobotPoseWorld)
         
         done = self.is_done()
@@ -259,11 +257,11 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer):
         buffer.logprobs[step] = logprob
         
         # Gym part
-        next_obs, next_intention, reward, done, info = env.step(action.cpu().numpy())
+        next_obs, next_intention, reward, done, info = env.step(action.cpu().numpy().flatten())
         done = np.array([done])
         buffer.rewards[step] = torch.tensor(reward).to(device).view(-1)
         next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
-        next_intention = torch.Tensor(next_intention).to(device).view(-1)
+        next_intention = torch.tensor(next_intention).to(device).view(-1)
     return next_obs, next_intention, next_done
         
 def get_device() -> torch.device:
@@ -292,7 +290,6 @@ def get_env():
     
     robotMap = map
     
-    print(startPoint, endPoint, trainingData.direction)
     return IntentionNavEnv(NetParameters.FOV_SIZE, pathsIn=paths, intentionsIn=intentions, mapIn=robotMap, startPoint=startPoint, endPoint=endPoint)
 
 if __name__ == "__main__":
