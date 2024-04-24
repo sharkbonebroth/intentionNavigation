@@ -80,12 +80,17 @@ class Robot:
     lidarImg = lidarImgUncroppedRotated[startY:endY, startX:endX]
     return lidarImg
 
-  def getBinaryFeedbackImage(self, sideLength: int = 141) -> np.ndarray:
+
+  def getBinaryFeedbackImage(self, scalefactor: float = 1.0) -> np.ndarray:
     xActual, yActual, yawActual = self.currPositionActual
+    
+    IMGSCALE = MAPSCALE * scalefactor
 
     # Initialize the image for plotting
-    odomPlotChannel = np.zeros(self.map.mapGrid.shape)
-    mapGridWithOdomChannel = np.dstack((odomPlotChannel, self.map.mapGrid))
+    resizedShape = (int(self.map.mapGrid.shape[0]//scalefactor), int(self.map.mapGrid.shape[1]//scalefactor))
+    resizedMapGrid = resize(self.map.mapGrid, resizedShape, anti_aliasing = False)
+    odomPlotChannel = np.zeros(resizedShape, dtype=np.uint8)
+    mapGridWithOdomChannel = np.dstack((odomPlotChannel, resizedMapGrid))
 
     # Plot the odometry estimates on the odom channel
     xBeingPlotted = xActual
@@ -94,8 +99,8 @@ class Robot:
     for odom in odomToPlot: # loop will miss the last one but wtv
       dx, dy = odom
 
-      xBeingPlottedDiscretized = int(xBeingPlotted / MAPSCALE)
-      yBeingPlottedDiscretized = int(yBeingPlotted / MAPSCALE)
+      xBeingPlottedDiscretized = int(xBeingPlotted / IMGSCALE)
+      yBeingPlottedDiscretized = int(yBeingPlotted / IMGSCALE)
 
       mapGridWithOdomChannel[yBeingPlottedDiscretized][xBeingPlottedDiscretized][0] = 1
 
@@ -103,12 +108,12 @@ class Robot:
       yBeingPlotted = yBeingPlotted - dy  
 
     # Crop the lidar reading image out
-    lidarRangeCroppedPx = math.floor(LIDARRANGE/MAPSCALE)
+    lidarRangeCroppedPx = math.floor(LIDARRANGE/IMGSCALE)
     lidarRangeUncroppedPx = int(np.ceil(lidarRangeCroppedPx * math.sqrt(2))) #5m vision range, account for potential cropping later
     lidarImgUncroppedSize = int(2 * lidarRangeUncroppedPx + 1)
     lidarImgUncropped = np.zeros((lidarImgUncroppedSize, lidarImgUncroppedSize, 2), dtype=np.uint8)
-    xActualImgCoord = int(xActual/MAPSCALE)
-    yActualImgCoord = int(yActual/MAPSCALE)
+    xActualImgCoord = int(xActual/IMGSCALE)
+    yActualImgCoord = int(yActual/IMGSCALE)
     for yCoordLidarImg, yCoordOdomImg in enumerate(range(yActualImgCoord - lidarRangeUncroppedPx, yActualImgCoord + lidarRangeUncroppedPx + 1)):
       for XCoordLidarImg, xCoordOdomImg in enumerate(range(xActualImgCoord - lidarRangeUncroppedPx, xActualImgCoord + lidarRangeUncroppedPx + 1)):
         if yCoordOdomImg < 0 or yCoordOdomImg >= self.map.height or xCoordOdomImg < 0 or xCoordOdomImg >= self.map.width:
@@ -126,9 +131,6 @@ class Robot:
     endY = endX
     
     lidarImg = lidarImgUncroppedRotated[startY:endY, startX:endX]
-
-    if sideLength != lidarImg.shape[0]:
-      lidarImg = resize(lidarImg, (sideLength, sideLength), anti_aliasing = False)
 
     return lidarImg
 
