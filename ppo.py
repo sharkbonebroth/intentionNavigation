@@ -96,7 +96,7 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
         
         # Gym part
         next_obs, next_intention, reward, done, info = env.step(action.cpu().numpy().flatten())
-        env.render(next_obs)
+        # env.render(next_obs)
         buffer.rewards[step] = torch.tensor(reward).to(device).view(-1)
         if done:
             env.reset()
@@ -106,7 +106,7 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
         next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
         next_intention = torch.tensor(next_intention).to(device).view(-1)
         
-        print(f"global_step={global_step}, episodic_return={info['episode']['reward']}, episode_length={info['episode']['length']}")
+        # print(f"global_step={global_step}, episodic_return={info['episode']['reward']}, episode_length={info['episode']['length']}")
         if WandbSettings.ON and (step != 0)  and ((step % WandbSettings.LOGGING_INTERVAL) == 0):
             print("Logging episodic metrics")
             wandb.log({"charts/episodic_return" : info["episode"]["reward"]}, global_step)
@@ -128,20 +128,10 @@ def get_device() -> torch.device:
 def get_env():
     # return DummyIntentionNavEnv(EnvParameters.OBS_SPACE_SHAPE)
     dataLoader = DataLoader("maps", "labelledData") # mapdir, labelledDataDir
-    paths = []
-    intentions = []
-    trainingData, map = dataLoader.getLabelledDataAndMap()
-    trajInM = trainingData.trajectory
-    paths.append(trajInM)
-    intentions.append(trainingData.direction)
     
     # Clockwise positive for yaw
-    startPoint = trainingData.startPoint
-    endPoint = trainingData.endPoint
     
-    robotMap = map
-    
-    return IntentionNavEnv(NetParameters.FOV_SIZE, pathsIn=paths, intentionsIn=intentions, mapIn=robotMap, startPoint=startPoint, endPoint=endPoint)
+    return IntentionNavEnv(NetParameters.FOV_SIZE, dataLoader)
 
 if __name__ == "__main__":
     device = get_device()
