@@ -33,6 +33,8 @@ class IntentionNavEnv(gymnasium.Env):
         
         self.curBestWaypointId = 0
         self.totalReward = 0
+
+        plt.figure(figsize=(8, 6), dpi=150)
         
     def getObservations(self):
         return self.robot.getBinaryFeedbackImage(scaleFactor=4), float(self.curIntention)
@@ -106,13 +108,15 @@ class IntentionNavEnv(gymnasium.Env):
 
         # Plot its angle
         robotYaw = robotPosition[2]
-        endX = np.cos(robotYaw) * 10
-        endY = np.sin(robotYaw) * 10
+        endX = int(np.cos(robotYaw) * 10) + robotImgX
+        endY = int(np.sin(robotYaw) * 10) + robotImgY
         rr, cc = line(robotImgY, robotImgX, endY, endX)
         img[rr, cc] = np.array([0, 255, 0])
 
+        plt.clf()
         plt.imshow(img)
-        plt.show()
+        plt.draw()
+        plt.pause(0.01)
     
 class DummyIntentionNavEnv(gymnasium.Env):
     def __init__(self, obs_space_shape):
