@@ -1,7 +1,7 @@
 .venv
 __pycache__
-maps/
-labelledData/
+# maps/
+# labelledData/
 test.py
-
+models/
 wandb/

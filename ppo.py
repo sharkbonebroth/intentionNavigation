@@ -92,8 +92,9 @@ class PPO:
         self.optimizer.load_state_dict(state['optimizer'])
 
 best_episode_reward = -float('inf')
+best_weights = None
 def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
-    global best_episode_reward
+    global best_episode_reward, best_weights
     env.reset()
     obs, intention = env.getObservations()
     next_obs = torch.Tensor(obs).to(device)
@@ -132,12 +133,16 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
             best_weights = ppo.get_state()
         
         print(f"global_step={global_step}, episodic_return={info['episode']['reward']}, episode_length={info['episode']['length']}")
-        if WandbSettings.ON and (step != 0)  and ((step % WandbSettings.LOGGING_INTERVAL) == 0):
-            ppo.save_model(ppo.get_state(), f"{NetParameters.MODEL_FOLDER}/latest.pth")
-            ppo.save_model(best_weights, f"{NetParameters.MODEL_FOLDER}/best.pth")
+        if WandbSettings.ON and ((step % WandbSettings.LOGGING_INTERVAL) == 0) and (step != 0):
             print("Logging episodic metrics")
             wandb.log({"charts/episodic_return" : episode_reward}, global_step)
             wandb.log({"charts/episodic_length" : info["episode"]["length"]}, global_step)
+
+        if (step != 0) and ((global_step % NetParameters.SAVING_INTERVAL) == 0):
+            print("Saving model...")
+            ppo.save_model(ppo.get_state(), f"{NetParameters.MODEL_FOLDER}/latest.pth")
+            ppo.save_model(best_weights, f"{NetParameters.MODEL_FOLDER}/best.pth")
+
     print(f"{time.time() - start} seconds for an ep")
     return next_obs, next_intention, next_done, global_step
         

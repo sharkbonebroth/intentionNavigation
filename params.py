@@ -6,14 +6,15 @@ class NetParameters:
     NUM_CHANNEL = 2
     # Intention Length
     VECTOR_LEN = 3  # [intention, action t-1 maybe?] (Primal vector length ) : [dx, dy, d total, action t-1]
-    LOAD_MODEL = False
+    LOAD_MODEL = True
     MODEL_FOLDER = "./models"
     MODEL_PATH = "./models/latest.pth"
+    SAVING_INTERVAL = 200
 
 class WandbSettings:
     ON = True
     LOGGING_INTERVAL = 30
-    EXPERIMENT_NAME = "RealTrain3"
+    EXPERIMENT_NAME = "multimaphehe"
     EXPERIMENT_PROJECT = "intentionNav"
 
 class EnvParameters:

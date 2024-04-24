@@ -6,6 +6,8 @@ import math
 from utilTypes import Action
 from map import MAPSCALE
 from skimage.transform import resize
+import time
+from PIL import Image
 
 odometryDataPointType = Tuple[float, float] # delta x, delta y
 LIDARRANGE = 7
@@ -102,8 +104,15 @@ class Robot:
 
       xBeingPlottedDiscretized = int(xBeingPlotted / IMGSCALE)
       yBeingPlottedDiscretized = int(yBeingPlotted / IMGSCALE)
-
-      mapGridWithOdomChannel[yBeingPlottedDiscretized][xBeingPlottedDiscretized][0] = 1
+      
+      try:
+        mapGridWithOdomChannel[yBeingPlottedDiscretized][xBeingPlottedDiscretized][0] = 1
+      except:
+        print("Tried to plot out of bounds! Img has been saved")
+        fileName = f"outOfBoundImage-{time.strftime('%Y%m%d_%H%M%S')}.png"
+        colorImg = self.convertBinaryFeedbackImageToColor(mapGridWithOdomChannel)
+        im = Image.fromarray(colorImg)
+        im.save(fileName)
 
       xBeingPlotted = xBeingPlotted - dx
       yBeingPlotted = yBeingPlotted - dy  
@@ -117,7 +126,7 @@ class Robot:
     yActualImgCoord = int(yActual/IMGSCALE)
     for yCoordLidarImg, yCoordOdomImg in enumerate(range(yActualImgCoord - lidarRangeUncroppedPx, yActualImgCoord + lidarRangeUncroppedPx + 1)):
       for XCoordLidarImg, xCoordOdomImg in enumerate(range(xActualImgCoord - lidarRangeUncroppedPx, xActualImgCoord + lidarRangeUncroppedPx + 1)):
-        if yCoordOdomImg < 0 or yCoordOdomImg >= self.map.height or xCoordOdomImg < 0 or xCoordOdomImg >= self.map.width:
+        if yCoordOdomImg < 0 or yCoordOdomImg >= resizedShape[0] or xCoordOdomImg < 0 or xCoordOdomImg >= resizedShape[1]:
           continue
         else:
           lidarImgUncropped[yCoordLidarImg][XCoordLidarImg] = mapGridWithOdomChannel[yCoordOdomImg][xCoordOdomImg]
@@ -215,9 +224,17 @@ class Robot:
     self.odometry.append((dxWorldFrameEstimate, dyWorldFrameEstimate))
 
     # Plot perfect odometry on self.mapImgWithPerfectOdomPlotted
+    height = self.mapImgWithPerfectOdomPlotted.shape[0]
+    width = self.mapImgWithPerfectOdomPlotted.shape[1]
     currXWorldActualDiscretized = int(currXWorldActual / MAPSCALE)
     currYWorldActualDiscretized = int(currYWorldActual / MAPSCALE)
-    self.mapImgWithPerfectOdomPlotted[currYWorldActualDiscretized][currXWorldActualDiscretized] = np.array([255,0,0])
+
+    if currYWorldActualDiscretized < 0 or currYWorldActualDiscretized >= height or currXWorldActualDiscretized < 0 or currXWorldActualDiscretized >= width:
+      print("Went out of bounds!")
+    else:
+      self.mapImgWithPerfectOdomPlotted[currYWorldActualDiscretized][currXWorldActualDiscretized] = np.array([255,0,0])
+
+    
 
 # Class implementating the low level controller, which will be used to control the robot to follow the waypoints. This 
 # is not used in training (the simulated odometry with gaussian noise is used instead), but will be useful in evaluation
