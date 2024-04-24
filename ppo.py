@@ -1,13 +1,22 @@
 import torch
 import numpy as np
-from params import TrainingParameters, EnvParameters, NetParameters, WandbSettings
-from net import ActorCritic, product
-from utilTypes import getIntentionAsOnehot
+from params import TrainingParameters, EnvParameters, NetParameters
+import gymnasium
+from robot import Robot
+from torch.cuda.amp.autocast_mode import autocast
+import torch.nn.functional as F
+from einops import rearrange
+from skimage.draw import disk, line
+from utilTypes import Action, trajectoryType, find_closest_point, Intention
+from map import Map, MAPSCALE
+from typing import Tuple, List
 from dataLoader import DataLoader
 import wandb
 import time
 import gymnasium
 from env import IntentionNavEnv
+import math
+import matplotlib.pyplot as plt
 
 class ReplayBuffer:
     def __init__(self, num_steps : int, num_envs : int, obs_space_shape : tuple, act_space_shape : tuple):
@@ -71,8 +80,120 @@ class PPO:
         onehot_intention = torch.from_numpy(getIntentionAsOnehot(intention, onehotSize=NetParameters.VECTOR_LEN)).to(self.device)
         _, _, value = self.policy(obs, onehot_intention)
         return value
+    
+class IntentionNavEnv(gymnasium.Env):
+    MAX_STEPS = 10000
+    def __init__(self, obs_space_shape : Tuple, pathsIn : List[trajectoryType], intentionsIn : List[Intention], mapIn : Map, startPoint, endPoint):
+        self.done : bool = False
+        self.obs_space_shape : tuple = obs_space_shape
+        self.paths : List[trajectoryType] = pathsIn
+        self.map : Map = mapIn
+        self.robot = Robot(map=mapIn, startX=startPoint[0], startY=startPoint[1], yaw=startPoint[2])
+        self.steps = 0
+        self.prevRobotPoseWorld = self.robot.currPositionActual
+        self.intentions = intentionsIn
+        self.trainingId = 0
+        
+        self.curPath = []
+        self.curIntention = Intention.LEFT
+        
+    def getObservations(self):
+        return self.robot.getFeedbackImage(), float(self.curIntention)
 
-def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
+    def render(self):
+        img = np.copy(self.robot.mapImgWithPerfectOdomPlotted)
+        
+        # Plot the current position of the robot
+        robotPosition = self.robot.currPositionActual
+        robotImgX = int(robotPosition[0] / MAPSCALE)
+        robotImgY = int(robotPosition[1] / MAPSCALE)
+        rr, cc = disk(center = (robotImgY, robotImgX), radius = 5)
+        img[rr, cc] = np.array([0, 0, 255])
+
+        # Plot its angle
+        robotYaw = robotPosition[2]
+        endX = math.cos(robotYaw) * 10
+        endY = math.sin(robotYaw) * 10
+        rr, cc = line(robotImgY, robotImgX, endY, endX)
+        img[rr, cc] = np.array([0, 255, 0])
+
+        plt.imshow(img)
+        plt.show()
+
+        
+    def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
+        self.robot.move(Action(*action)) 
+        
+        # Append intention to obs
+        obs, intention = self.getObservations()
+        
+        curRobotPoseWorld = (0.0, 0.0, 0.0)
+        reward = self.get_reward(action, curRobotPoseWorld, self.prevRobotPoseWorld)
+        
+        done = self.is_done()
+        self.prevRobotPoseWorld = curRobotPoseWorld
+        
+        info = dict()
+        
+        self.steps += 1
+        return obs, intention, reward, done, info
+    
+    def get_reward(self, action : np.ndarray, curRobotPos, prevRobotPos):
+        
+        # Add reward calculation for path following
+        return 0.0
+    
+    def reset(self):
+        if self.trainingId >= len(self.paths):
+            return np.zeros((640,480))
+        self.curPath = self.paths[self.trainingId]
+        self.curIntention = self.intentions[self.trainingId]
+        self.trainingId +=1
+    
+    def is_done(self):
+        # Add goal check here
+        
+        if self.steps >= IntentionNavEnv.MAX_STEPS:
+            return True
+        return False
+    
+class DummyIntentionNavEnv(gymnasium.Env):
+    def __init__(self, obs_space_shape):
+        self.done : bool = False
+        self.obs_space_shape = obs_space_shape
+        
+    def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
+        obs = self.get_observation()
+        reward = self.get_reward(action)
+        done = self.is_done()
+        info = dict()
+        return obs, reward, done, info
+        
+    def is_done(self) -> bool:
+        """
+        TODO: Returns episode completion state
+        """
+        return self.done
+        
+    def get_observation(self) -> np.ndarray:
+        """
+        TODO: Returns current observation
+        """
+        return torch.rand(self.obs_space_shape)
+        
+    def get_reward(self, action) -> float:
+        """
+        TODO: Returns reward based on state and action
+        """
+        return np.random.random()
+    
+    def reset(self) -> np.ndarray:
+        """
+        TODO: Reset the environment to default state and returns ndarray with same shape as obs
+        """
+        return torch.zeros(self.obs_space_shape)
+
+def rollout(env : gymnasium.Env, buffer : ReplayBuffer):
     env.reset()
     obs, intention = env.getObservations()
     next_obs = torch.Tensor(obs).to(device)
