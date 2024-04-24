@@ -16,7 +16,7 @@ class Reward:
     REGRESSPOINTPENALTY: float = -0.2
     MAXPROGRESSPOINTREWARD: float = 0.2
     STAGNATEPENALTY: float = -0.05
-    VELOCITYTOOLOWPENALTY: float -0.02
+    VELOCITYTOOLOWPENALTY: float = -0.02
     VELOCITYTOOLOWTHRESHOLD: float = 1
 
 class IntentionNavEnv(gymnasium.Env):
