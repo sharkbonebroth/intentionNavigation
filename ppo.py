@@ -7,9 +7,8 @@ from robot import Robot
 from torch.cuda.amp.autocast_mode import autocast
 import torch.nn.functional as F
 from einops import rearrange
-from path import AStarTrajectorySolver
 
-from utilTypes import Action, trajectoryType, find_closest_point, Intention, get_distance
+from utilTypes import Action, trajectoryType, find_closest_point, Intention, get_distance, getIntentionAsOnehot
 from map import Map
 from typing import Tuple, List
 from dataLoader import DataLoader
@@ -146,7 +145,8 @@ class PPO:
         self.action_space_shape = product(action_space_shape)
         
     def get_action_and_value(self, obs, intention, action=None):
-        action_mean, action_logstd, value = self.policy(obs, intention)
+        onehot_intention = torch.from_numpy(getIntentionAsOnehot(intention, onehotSize=NetParameters.VECTOR_LEN))
+        action_mean, action_logstd, value = self.policy(obs, onehot_intention)
         action_std = torch.exp(action_logstd)
         probs = torch.distributions.Normal(action_mean, action_std)
         if action is None:
@@ -154,7 +154,8 @@ class PPO:
         return action , probs.log_prob(action).sum(1) , probs.entropy().sum(1), value
         
     def get_value(self, obs, intention):
-        _, _, value = self.policy(obs, intention)
+        onehot_intention = torch.froom_numpy(getIntentionAsOnehot(intention, onehotSize=NetParameters.VECTOR_LEN))
+        _, _, value = self.policy(obs, onehot_intention)
         return value
     
 class IntentionNavEnv(gymnasium.Env):
@@ -177,6 +178,7 @@ class IntentionNavEnv(gymnasium.Env):
         self.curIntention = self.intentions[self.trainingId]
         
         self.curBestWaypointId = 0
+        self.totalReward = 0
         
     def getObservations(self):
         return self.robot.getFeedbackImage(), float(self.curIntention)
@@ -194,12 +196,19 @@ class IntentionNavEnv(gymnasium.Env):
         self.prevRobotPoseWorld = curRobotPoseWorld
         
         info = dict()
-        
+        self.totalReward += reward
         self.steps += 1
+        info['episode'] = {
+            'reward' : self.totalReward / self.steps,
+            'length' : self.steps
+        }
+        
         return obs, intention, reward, done, info
     
     def get_reward(self, action : np.ndarray, curRobotPos, prevRobotPos):
-        closestWaypointId = find_closest_point(curRobotPos[:2], self.paths)
+        print("Cur robot pos ", curRobotPos)
+        closestWaypointId = find_closest_point(curRobotPos[:2], self.curPath)
+        print("Closest waypt ", self.curPath[closestWaypointId])
         reward = closestWaypointId - self.curBestWaypointId
         reward *= 0.1
         
@@ -208,6 +217,8 @@ class IntentionNavEnv(gymnasium.Env):
         return reward
     
     def reset(self):
+        self.steps = 0
+        self.totalReward = 0
         self.robot.reset(*self.startPoint)
         # if self.trainingId >= len(self.paths):
         #     return np.zeros((640,480))
@@ -258,7 +269,7 @@ class DummyIntentionNavEnv(gymnasium.Env):
         """
         return torch.zeros(self.obs_space_shape)
 
-def rollout(env : gymnasium.Env, buffer : ReplayBuffer):
+def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
     env.reset()
     obs, intention = env.getObservations()
     next_obs = torch.Tensor(obs).to(device)
@@ -266,6 +277,7 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer):
     next_done = torch.zeros(TrainingParameters.N_ENVS).to(device)
     
     for step in range(TrainingParameters.N_STEPS):
+        global_step += 1 * TrainingParameters.N_ENVS
         buffer.observations[step] = next_obs
         buffer.intentions[step] = next_intention
         buffer.dones[step] = next_done
@@ -283,13 +295,11 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer):
         next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
         next_intention = torch.tensor(next_intention).to(device).view(-1)
         
-        # for item in info:
-        #     if "episode" in item.keys():
-        #         print(f"global_step={global_step}, episodic_return={item['episode']['r']}")
-        #         wandb.log("charts/episodic_return", item["episode"]["r"], global_step)
-        #         wandb.log("charts/episodic_length", item["episode"]["l"], global_step)
-        #         break
-    return next_obs, next_intention, next_done
+        print(f"global_step={global_step}, episodic_return={info['episode']['reward']}")
+        if WandbSettings.ON:
+            wandb.log({"charts/episodic_return" : info["episode"]["reward"]}, global_step)
+            wandb.log({"charts/episodic_length" : info["episode"]["length"]}, global_step)
+    return next_obs, next_intention, next_done, global_step
         
 def get_device() -> torch.device:
     device = torch.device('cpu')
@@ -308,7 +318,8 @@ def get_env():
     paths = []
     intentions = []
     trainingData, map = dataLoader.getLabelledDataAndMap()
-    paths.append(trainingData.trajectory)
+    trajInM = trainingData.trajectory
+    paths.append(trajInM)
     intentions.append(trainingData.direction)
     
     # Clockwise positive for yaw
@@ -353,7 +364,7 @@ if __name__ == "__main__":
             ppo.optimizer.param_groups[0]["lr"] = lrnow
             
         #policy rollout
-        next_obs, next_intention, next_done = rollout(env, buffer)
+        next_obs, next_intention, next_done, global_step = rollout(env, buffer, global_step)
 
         #bootstrap reward if not done
         with torch.no_grad():

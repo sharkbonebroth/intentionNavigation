@@ -18,7 +18,18 @@ def find_closest_point(point, traj : trajectoryType) -> int:
             closestId =  id
     return closestId
 
-class Intention(enum.Enum):
+def getIntentionAsOnehot(intention, onehotSize):
+    intention = float(intention)
+    onehot = np.zeros(onehotSize, dtype=np.float32)
+    if intention == -1.0:
+        onehot[0] = 1
+    elif intention == 0.0: 
+        onehot[1] = 1
+    elif intention == 1.0:
+        onehot[2] = 1
+    return onehot
+
+class Intention(int, enum.Enum):
   LEFT = -1
   STRAIGHT = 0
   RIGHT = 1

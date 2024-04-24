@@ -3,11 +3,11 @@ class NetParameters:
     INTENTION_SIZE = 8
     FOV_SIZE = (281,281,3)
     # Intention Length
-    VECTOR_LEN = 1  # [intention, action t-1 maybe?] (Primal vector length ) : [dx, dy, d total, action t-1]
+    VECTOR_LEN = 3  # [intention, action t-1 maybe?] (Primal vector length ) : [dx, dy, d total, action t-1]
 
 class WandbSettings:
     ON = False
-    EXPERIMENT_NAME = "Testtarin"
+    EXPERIMENT_NAME = "Testtrain1"
     EXPERIMENT_PROJECT = "intentionNav"
 
 class EnvParameters:
