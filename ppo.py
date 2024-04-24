@@ -1,19 +1,13 @@
 import torch
-import torch.nn as nn
 import numpy as np
 from params import TrainingParameters, EnvParameters, NetParameters, WandbSettings
-import gymnasium
-from robot import Robot
-from torch.cuda.amp.autocast_mode import autocast
-import torch.nn.functional as F
-from einops import rearrange
-
-from utilTypes import Action, trajectoryType, find_closest_point, Intention, get_distance, getIntentionAsOnehot
-from map import Map
-from typing import Tuple, List
+from net import ActorCritic, product
+from utilTypes import getIntentionAsOnehot
 from dataLoader import DataLoader
 import wandb
 import time
+import gymnasium
+from env import IntentionNavEnv
 
 class ReplayBuffer:
     def __init__(self, num_steps : int, num_envs : int, obs_space_shape : tuple, act_space_shape : tuple):
@@ -41,99 +35,17 @@ class ReplayBuffer:
         b_values = self.values.reshape(-1)
         b_intentions = self.intentions.reshape(-1)
         return b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values, b_intentions
-        
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, bias_const)
-    return layer
 
 def normalize_fn(x : np.ndarray):
     return (x - x.mean()) / (x.std() + 1e-8)
 
-def product(iter):
-    val = 1
-    for item in iter:
-        val *= item
-    return val
-
-class ActorCritic(nn.Module):
-    def __init__(self, obs_space_shape, action_space_shape):
-        super().__init__()
-        obs_space_shape = product(obs_space_shape)
-        action_space_shape = product(action_space_shape)
-        
-        self.num_channel = 3
-        
-        # observation encoder
-        self.conv1 = nn.Conv2d(self.num_channel, NetParameters.NET_SIZE // 4, 3, 1, 1)
-        self.conv1a = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 4, 3, 1, 1)
-        self.conv1b = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 4, 3, 1, 1)
-        self.pool1 = nn.MaxPool2d(5)
-        self.conv2 = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 2, 2, 1, 1)
-        self.conv2a = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE // 2, 2, 1, 1)
-        self.conv2b = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE // 2, 2, 1, 1)
-        self.pool2 = nn.MaxPool2d(5)
-        self.conv3 = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, 3,
-                               1, 0)
-        self.conv3a = nn.Conv2d(NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, 3,
-                               1, 0)
-        self.conv3b = nn.Conv2d(NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, 3,
-                               1, 0)
-        self.pool3 = nn.MaxPool2d(5)
-        self.fully_connected_1 = nn.Linear(NetParameters.VECTOR_LEN, NetParameters.INTENTION_SIZE)
-        self.fully_connected_2 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
-        self.fully_connected_3 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
-        
-        self.policy_layer = layer_init(nn.Linear(NetParameters.NET_SIZE, action_space_shape), std=0.01)
-        self.value_layer = layer_init(nn.Linear(NetParameters.NET_SIZE, 1), std=1.)
-        
-        self.actor_logstd = nn.Parameter(torch.zeros(1, action_space_shape))
-        
-    @autocast()
-    def forward(self, obs, intention):
-        """run neural network"""
-        obs = torch.reshape(obs, (-1, self.num_channel, EnvParameters.FOV_SIZE, EnvParameters.FOV_SIZE))
-        intention = torch.reshape(intention, (-1, NetParameters.VECTOR_LEN))
-        # matrix input
-        x_1 = F.relu(self.conv1(obs))
-        x_1 = F.relu(self.conv1a(x_1))
-        x_1 = F.relu(self.conv1b(x_1))
-        x_1 = self.pool1(x_1)
-        x_1 = F.relu(self.conv2(x_1))
-        x_1 = F.relu(self.conv2a(x_1))
-        x_1 = F.relu(self.conv2b(x_1))
-        x_1 = self.pool2(x_1)
-        x_1 = self.conv3(x_1)
-        x_1 = self.conv3a(x_1)
-        x_1 = self.conv3b(x_1)
-        x_1 = self.pool3(x_1)
-        x_1 = F.relu(x_1.view(x_1.size(0), -1))
-        
-        # vector input
-        x_2 = F.relu(self.fully_connected_1(intention))
-        
-        x_3 = torch.cat((x_1, x_2), -1)
-        h1 = F.relu(self.fully_connected_2(x_3))
-        h1 = self.fully_connected_3(h1)
-        h2 = F.relu(h1 + x_3)
-        h2 = h2.view(h2.shape[0], h2.shape[1], 1, 1)
-        
-        x = rearrange(h2, 'b c h w -> b (h w) c')
-        
-        x = torch.reshape(x, (-1, NetParameters.NET_SIZE))
-        
-        actor_mean = self.policy_layer(x)
-        actor_logstd = self.actor_logstd.expand_as(actor_mean)
-        value = self.value_layer(x)
-        return actor_mean, actor_logstd, value
-
 class PPO:
-    def __init__(self, obs_space_shape, action_space_shape):
-        self.policy = ActorCritic(obs_space_shape, action_space_shape).to(device)
+    def __init__(self, device, obs_space_shape, action_space_shape):
+        self.device = device
+        self.policy = ActorCritic(obs_space_shape, action_space_shape).to(self.device)
         total = 0
         id = 0
         for p in self.policy.parameters():
-            print(f"{id} has ", p.numel())
             total += p.numel()
             id += 1
         print("Total # of params ", total)
@@ -145,7 +57,8 @@ class PPO:
         self.action_space_shape = product(action_space_shape)
         
     def get_action_and_value(self, obs, intention, action=None):
-        onehot_intention = torch.from_numpy(getIntentionAsOnehot(intention, onehotSize=NetParameters.VECTOR_LEN))
+        obs = obs.to(self.device)
+        onehot_intention = torch.from_numpy(getIntentionAsOnehot(intention, onehotSize=NetParameters.VECTOR_LEN)).to(self.device)
         action_mean, action_logstd, value = self.policy(obs, onehot_intention)
         action_std = torch.exp(action_logstd)
         probs = torch.distributions.Normal(action_mean, action_std)
@@ -154,120 +67,10 @@ class PPO:
         return action , probs.log_prob(action).sum(1) , probs.entropy().sum(1), value
         
     def get_value(self, obs, intention):
-        onehot_intention = torch.froom_numpy(getIntentionAsOnehot(intention, onehotSize=NetParameters.VECTOR_LEN))
+        obs = obs.to(self.device)
+        onehot_intention = torch.from_numpy(getIntentionAsOnehot(intention, onehotSize=NetParameters.VECTOR_LEN)).to(self.device)
         _, _, value = self.policy(obs, onehot_intention)
         return value
-    
-class IntentionNavEnv(gymnasium.Env):
-    MAX_STEPS = 10000
-    def __init__(self, obs_space_shape : Tuple, pathsIn : List[trajectoryType], intentionsIn : List[Intention], mapIn : Map, startPoint, endPoint):
-        self.done : bool = False
-        self.obs_space_shape : tuple = obs_space_shape
-        self.paths : List[trajectoryType] = pathsIn
-        self.map : Map = mapIn
-        self.robot = Robot(map=mapIn, startX=startPoint[0], startY=startPoint[1], yaw=startPoint[2])
-        self.steps = 0
-        self.prevRobotPoseWorld = self.robot.currPositionActual
-        self.intentions = intentionsIn
-        self.trainingId = 0
-        
-        self.startPoint = startPoint
-        self.endPoint = endPoint
-        
-        self.curPath = self.paths[self.trainingId]
-        self.curIntention = self.intentions[self.trainingId]
-        
-        self.curBestWaypointId = 0
-        self.totalReward = 0
-        
-    def getObservations(self):
-        return self.robot.getFeedbackImage(), float(self.curIntention)
-        
-    def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
-        self.robot.move(Action(*action)) 
-        
-        # Append intention to obs
-        obs, intention = self.getObservations()
-        
-        curRobotPoseWorld = self.robot.getRobotPoseWorld()
-        reward = self.get_reward(action, curRobotPoseWorld, self.prevRobotPoseWorld)
-        
-        done = self.is_done(curRobotPoseWorld)
-        self.prevRobotPoseWorld = curRobotPoseWorld
-        
-        info = dict()
-        self.totalReward += reward
-        self.steps += 1
-        info['episode'] = {
-            'reward' : self.totalReward / self.steps,
-            'length' : self.steps
-        }
-        
-        return obs, intention, reward, done, info
-    
-    def get_reward(self, action : np.ndarray, curRobotPos, prevRobotPos):
-        print("Cur robot pos ", curRobotPos)
-        closestWaypointId = find_closest_point(curRobotPos[:2], self.curPath)
-        print("Closest waypt ", self.curPath[closestWaypointId])
-        reward = closestWaypointId - self.curBestWaypointId
-        reward *= 0.1
-        
-        if closestWaypointId > self.curBestWaypointId:
-            self.curBestWaypointId = closestWaypointId
-        return reward
-    
-    def reset(self):
-        self.steps = 0
-        self.totalReward = 0
-        self.robot.reset(*self.startPoint)
-        # if self.trainingId >= len(self.paths):
-        #     return np.zeros((640,480))
-        # self.trainingId +=1
-        # self.curPath = self.paths[self.trainingId]
-        # self.curIntention = self.intentions[self.trainingId]
-    
-    def is_done(self, curRobotPoseWorld):
-        if get_distance(curRobotPoseWorld, self.endPoint) < 0.1:
-            return True
-        if self.steps >= IntentionNavEnv.MAX_STEPS:
-            return True
-        return False
-    
-class DummyIntentionNavEnv(gymnasium.Env):
-    def __init__(self, obs_space_shape):
-        self.done : bool = False
-        self.obs_space_shape = obs_space_shape
-        
-    def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
-        obs = self.get_observation()
-        reward = self.get_reward(action)
-        done = self.is_done()
-        info = dict()
-        return obs, reward, done, info
-        
-    def is_done(self) -> bool:
-        """
-        TODO: Returns episode completion state
-        """
-        return self.done
-        
-    def get_observation(self) -> np.ndarray:
-        """
-        TODO: Returns current observation
-        """
-        return torch.rand(self.obs_space_shape)
-        
-    def get_reward(self, action) -> float:
-        """
-        TODO: Returns reward based on state and action
-        """
-        return np.random.random()
-    
-    def reset(self) -> np.ndarray:
-        """
-        TODO: Reset the environment to default state and returns ndarray with same shape as obs
-        """
-        return torch.zeros(self.obs_space_shape)
 
 def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
     env.reset()
@@ -302,13 +105,13 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
     return next_obs, next_intention, next_done, global_step
         
 def get_device() -> torch.device:
-    device = torch.device('cpu')
-    print("Device set to : cpu")
-    # set device to cpu or cuda
     if torch.cuda.is_available(): 
         device = torch.device('cuda:0') 
         torch.cuda.empty_cache()
         print("Device set to : " + str(torch.cuda.get_device_name(device)))
+    else:
+        device = torch.device('cpu')
+        print("Device set to : cpu")
     print("============================================================================================")
     return device
         
@@ -333,7 +136,6 @@ def get_env():
 if __name__ == "__main__":
     device = get_device()
     
-    # TODO (Nielsen): Log to wandb
     if WandbSettings.ON:
         wandb_id = wandb.util.generate_id()
         wandb.init(project=WandbSettings.EXPERIMENT_PROJECT,
@@ -347,7 +149,7 @@ if __name__ == "__main__":
     
     batch_size = TrainingParameters.N_STEPS * TrainingParameters.N_ENVS
     
-    ppo = PPO(EnvParameters.OBS_SPACE_SHAPE, EnvParameters.ACT_SPACE_SHAPE)
+    ppo = PPO(device, EnvParameters.OBS_SPACE_SHAPE, EnvParameters.ACT_SPACE_SHAPE)
     buffer = ReplayBuffer(TrainingParameters.N_STEPS, TrainingParameters.N_ENVS, EnvParameters.OBS_SPACE_SHAPE, EnvParameters.ACT_SPACE_SHAPE)
     env = get_env()
     

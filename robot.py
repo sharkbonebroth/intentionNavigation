@@ -25,6 +25,7 @@ class Robot:
   def reset(self, startX: float, startY: float, yaw: float):
     self.currPositionActual = (startX,startY,yaw) # keep track of robot current position; no gaussian noise; In world frame
     self.currPositionEstimate = (startX,startY,yaw) # in world framne
+    self.odometry = []
   
   def addGaussianNoise(self, value: float, variance: float = 0.05):
     return value + np.random.normal(0, variance)
@@ -85,12 +86,13 @@ class Robot:
 
   def hasCrashedIntoWall(self) -> bool:
     mapGrid = self.map.mapGrid
+    mapHeight, mapWidth = mapGrid.shape
     x = self.currPositionActual[0]
     y = self.currPositionActual[1]
     xDiscretized = int(x / MAPSCALE)
     yDiscretized = int(y / MAPSCALE)
     # We assume the edge of the map is a wall too!
-    if (x < 0) or (x > MAPSCALE * mapGrid.width) or (y < 0) or (y > MAPSCALE * mapGrid.height):
+    if (x < 0) or (x > MAPSCALE * mapWidth) or (y < 0) or (y > MAPSCALE * mapHeight):
       return True
     return mapGrid[yDiscretized][xDiscretized]
     
