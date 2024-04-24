@@ -115,7 +115,7 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
         
         # Gym part
         next_obs, next_intention, reward, done, info = env.step(action.cpu().numpy().flatten())
-        env.render(next_obs)
+        # env.render(next_obs)
         buffer.rewards[step] = torch.tensor(reward).to(device).view(-1)
         if done:
             env.reset()
@@ -155,20 +155,10 @@ def get_device() -> torch.device:
 def get_env():
     # return DummyIntentionNavEnv(EnvParameters.OBS_SPACE_SHAPE)
     dataLoader = DataLoader("maps", "labelledData") # mapdir, labelledDataDir
-    paths = []
-    intentions = []
-    trainingData, map = dataLoader.getLabelledDataAndMap()
-    trajInM = trainingData.trajectory
-    paths.append(trajInM)
-    intentions.append(trainingData.direction)
     
     # Clockwise positive for yaw
-    startPoint = trainingData.startPoint
-    endPoint = trainingData.endPoint
     
-    robotMap = map
-    
-    return IntentionNavEnv(NetParameters.FOV_SIZE, pathsIn=paths, intentionsIn=intentions, mapIn=robotMap, startPoint=startPoint, endPoint=endPoint)
+    return IntentionNavEnv(NetParameters.FOV_SIZE, dataLoader)
 
 if __name__ == "__main__":
     device = get_device()

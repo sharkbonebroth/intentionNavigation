@@ -11,9 +11,9 @@ class NetParameters:
     MODEL_PATH = "./models/latest.pth"
 
 class WandbSettings:
-    ON = False
+    ON = True
     LOGGING_INTERVAL = 30
-    EXPERIMENT_NAME = "RealTrain"
+    EXPERIMENT_NAME = "RealTrain3"
     EXPERIMENT_PROJECT = "intentionNav"
 
 class EnvParameters:
@@ -34,7 +34,7 @@ class TrainingParameters:
     N_EPOCHS = 10
     N_ENVS = 1
     N_STEPS = 128
-    TOTAL_TIMESTEPS = 5000
+    TOTAL_TIMESTEPS = 25000
     ANNEAL_LR = True
     NUM_MINIBATCHES = 48
     MINIBATCH_SIZE = 64
