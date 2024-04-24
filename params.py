@@ -1,7 +1,9 @@
 class NetParameters:
     NET_SIZE = 512
     INTENTION_SIZE = 8
-    FOV_SIZE = (281,281,3)
+    FOV_SIZE = (50, 50, 2)
+    FOV_SIZE_RGB = (50,50,3)
+    NUM_CHANNEL = 2
     # Intention Length
     VECTOR_LEN = 3  # [intention, action t-1 maybe?] (Primal vector length ) : [dx, dy, d total, action t-1]
 
@@ -12,7 +14,7 @@ class WandbSettings:
 
 class EnvParameters:
     OBS_SPACE_SHAPE = NetParameters.FOV_SIZE
-    FOV_SIZE=281
+    FOV_SIZE=NetParameters.FOV_SIZE[0]
     ACT_SPACE_SHAPE = (2,)
     
 class TrainingParameters:

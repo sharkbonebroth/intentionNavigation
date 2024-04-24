@@ -8,6 +8,7 @@ import gymnasium
 import numpy as np
 import torch
 from skimage.draw import disk, line
+from params import NetParameters
 class Reward:
     CRASHING : float = -1.0
 
@@ -34,7 +35,7 @@ class IntentionNavEnv(gymnasium.Env):
         self.totalReward = 0
         
     def getObservations(self):
-        return self.robot.getFeedbackImage(), float(self.curIntention)
+        return self.robot.getBinaryFeedbackImage(sideLength=NetParameters.FOV_SIZE[0]), float(self.curIntention)
         
     def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
         obs, intention = self.getObservations()

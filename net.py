@@ -23,24 +23,27 @@ class ActorCritic(nn.Module):
         obs_space_shape = product(obs_space_shape)
         action_space_shape = product(action_space_shape)
         
-        self.num_channel = 3
+        self.num_channel = NetParameters.NUM_CHANNEL
         
         # observation encoder
         self.conv1 = nn.Conv2d(self.num_channel, NetParameters.NET_SIZE // 4, 3, 1, 1)
         self.conv1a = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 4, 3, 1, 1)
         self.conv1b = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 4, 3, 1, 1)
-        self.pool1 = nn.MaxPool2d(5)
+        self.pool1 = nn.MaxPool2d(2)
+        
         self.conv2 = nn.Conv2d(NetParameters.NET_SIZE // 4, NetParameters.NET_SIZE // 2, 2, 1, 1)
         self.conv2a = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE // 2, 2, 1, 1)
         self.conv2b = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE // 2, 2, 1, 1)
-        self.pool2 = nn.MaxPool2d(5)
+        self.pool2 = nn.MaxPool2d(2)
+        
         self.conv3 = nn.Conv2d(NetParameters.NET_SIZE // 2, NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, 3,
                                1, 0)
         self.conv3a = nn.Conv2d(NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, 3,
                                1, 0)
         self.conv3b = nn.Conv2d(NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, NetParameters.NET_SIZE - NetParameters.INTENTION_SIZE, 3,
                                1, 0)
-        self.pool3 = nn.MaxPool2d(5)
+        self.pool3 = nn.MaxPool2d(2)
+        
         self.fully_connected_1 = nn.Linear(NetParameters.VECTOR_LEN, NetParameters.INTENTION_SIZE)
         self.fully_connected_2 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
         self.fully_connected_3 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
@@ -55,19 +58,31 @@ class ActorCritic(nn.Module):
         """run neural network"""
         obs = torch.reshape(obs, (-1, self.num_channel, EnvParameters.FOV_SIZE, EnvParameters.FOV_SIZE))
         intention = torch.reshape(intention, (-1, NetParameters.VECTOR_LEN))
+        
+        print(obs.shape)
+        
         # matrix input
         x_1 = F.relu(self.conv1(obs))
         x_1 = F.relu(self.conv1a(x_1))
         x_1 = F.relu(self.conv1b(x_1))
         x_1 = self.pool1(x_1)
+        
+        print(x_1.shape)
+        
         x_1 = F.relu(self.conv2(x_1))
         x_1 = F.relu(self.conv2a(x_1))
         x_1 = F.relu(self.conv2b(x_1))
         x_1 = self.pool2(x_1)
+        
+        print(x_1.shape)
+        
         x_1 = self.conv3(x_1)
         x_1 = self.conv3a(x_1)
         x_1 = self.conv3b(x_1)
         x_1 = self.pool3(x_1)
+        
+        print(x_1.shape)
+        
         x_1 = F.relu(x_1.view(x_1.size(0), -1))
         
         # vector input

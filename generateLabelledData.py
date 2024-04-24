@@ -14,7 +14,9 @@ import random
 from pathlib import Path
 from typing import List, Tuple
 from dataLoader import TrainingDataPoint
-import json
+
+ZOOMFACTOR = 2
+ZOOMEDMAPSCALE = MAPSCALE/ZOOMFACTOR
 
 parser = argparse.ArgumentParser(
     prog = "main.py",
@@ -55,9 +57,9 @@ mapGenCA = CellularAutomataMapGenerator()
 mapGenBSP = BSPTreeMapGenerator()
 def generateMap():
   if random.random() > 0.5:
-    return mapGenCA.generateMap(1200, 800, 16, "random", 0.5, 5, 4, 7)
+    return mapGenCA.generateMap(600, 400, 8, "random", 0.5, 5, 4, 7)
   else:
-    return mapGenBSP.generateMap(1200, 800, 16, 4)
+    return mapGenBSP.generateMap(600, 400, 8, 4)
 
 def updateMapImage(imgNpArray: np.ndarray):
   global panel
@@ -82,7 +84,7 @@ def generateMapCallback():
   global map, imgNpArray, originalImgNpArray, startPoint, endPoint, dataLabelingStateMachine, mapSaved, trajectory
   map = generateMap()
   mapSaved = False
-  imgNpArray = map.getColorImageNpArray()
+  imgNpArray = map.getColorImageNpArray(scaleFactor=ZOOMFACTOR)
   originalImgNpArray = copy.deepcopy(imgNpArray)
 
   updateMapImage(imgNpArray)
@@ -106,7 +108,7 @@ def plotLine(xStart: int, yStart: int, angle: float, npArrayImg: np.ndarray, pix
 
 def plotTrajectory(trajectory: List[Tuple[int, int]], npArrayImg: np.ndarray, pixelValue: np.ndarray):
   for point in trajectory:
-    npArrayImg[point[1]][point[0]] = pixelValue
+    npArrayImg[point[1]*ZOOMFACTOR][point[0]*ZOOMFACTOR] = pixelValue
 
 def mouseClickCallback(eventOrigin):
   global imgNpArray
@@ -115,13 +117,15 @@ def mouseClickCallback(eventOrigin):
     x = eventOrigin.x
     y = eventOrigin.y
 
-    if (dataLabelingStateMachine.getState() == 0) and map.mapGrid[y][x] == False:
-      global startPoint 
-      startPoint = [x, y, 0]
+    if (dataLabelingStateMachine.getState() == 0) and map.mapGrid[y//ZOOMFACTOR][x//ZOOMFACTOR] == False:
+      global startPoint
+      startPoint = [x//ZOOMFACTOR, y//ZOOMFACTOR, 0]
+      print(f"{x}, {y}")
+      print(startPoint)
       plotPoint(x, y, imgNpArray, [0, 0, 255])
-    elif (dataLabelingStateMachine.getState() == 1) and map.mapGrid[y][x] == False:
+    elif (dataLabelingStateMachine.getState() == 1) and map.mapGrid[y//ZOOMFACTOR][x//ZOOMFACTOR] == False:
       global endPoint
-      endPoint = [x, y, 0]
+      endPoint = [x//ZOOMFACTOR, y//ZOOMFACTOR, 0]
       plotPoint(x, y, imgNpArray, [255, 0, 0])
       toggleDataLabelingButtons(True)
 
@@ -137,19 +141,23 @@ def mouseReleaseCallback(eventOrigin):
 
     global startPoint, endPoint
     if (dataLabelingStateMachine.getState() == 0) and startPoint != None:
-      xDiff = x - startPoint[0]
-      yDiff = y - startPoint[1]
+      startXScaled = startPoint[0]*ZOOMFACTOR
+      startYScaled = startPoint[1]*ZOOMFACTOR
+      xDiff = x - startXScaled
+      yDiff = y - startYScaled
       angle = math.atan2(yDiff, xDiff)
       startPoint[2] = angle
-      plotLine(startPoint[0], startPoint[1], angle, imgNpArray, [0, 255, 0])
+      plotLine(startXScaled, startYScaled, angle, imgNpArray, [0, 255, 0])
       dataLabelingStateMachine.next()
 
     elif (dataLabelingStateMachine.getState() == 1 and endPoint != None):
-      xDiff = x - endPoint[0]
-      yDiff = y - endPoint[1]
+      endXScaled = endPoint[0]*ZOOMFACTOR
+      endYScaled = endPoint[1]*ZOOMFACTOR
+      xDiff = x - endXScaled
+      yDiff = y - endYScaled
       angle = math.atan2(yDiff, xDiff)
       endPoint[2] = angle
-      plotLine(endPoint[0], endPoint[1], angle, imgNpArray, [0, 255, 0])
+      plotLine(endXScaled, endYScaled, angle, imgNpArray, [0, 255, 0])
       solver = AStarTrajectorySolver()
       traj = solver.solveTrajectory(map, startPoint, endPoint)
       trajectory = copy.deepcopy(traj)
@@ -242,7 +250,7 @@ mapSaved = False
 map = generateMap()
 
 # map = mapGen.generateMap(1200, 800, 16, "random", 0.5, 5, 4, 7)
-imgNpArray = map.getColorImageNpArray()
+imgNpArray = map.getColorImageNpArray(scaleFactor = ZOOMFACTOR)
 originalImgNpArray = copy.deepcopy(imgNpArray)
 img =  ImageTk.PhotoImage(image=Image.fromarray(imgNpArray))
 panel = tk.Label(app, image=img, name="map")

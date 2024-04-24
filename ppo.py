@@ -3,6 +3,8 @@ import numpy as np
 from params import TrainingParameters, EnvParameters, NetParameters, WandbSettings
 import gymnasium
 
+from skimage.transform import resize
+
 from dataLoader import DataLoader
 import wandb
 import time
@@ -10,8 +12,7 @@ from net import product, ActorCritic
 from env import IntentionNavEnv
 from utilTypes import getIntentionAsOnehot
 
-STD_SCALE = 0.1
-
+STD_SCALE = 0.8
 class ReplayBuffer:
     def __init__(self, num_steps : int, num_envs : int, obs_space_shape : tuple, act_space_shape : tuple):
         batch_shape = (num_steps, num_envs)
