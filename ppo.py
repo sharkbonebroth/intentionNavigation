@@ -73,6 +73,18 @@ class PPO:
         onehot_intention = torch.from_numpy(getIntentionAsOnehot(intention, onehotSize=NetParameters.VECTOR_LEN)).to(self.device)
         _, _, value = self.policy(obs, onehot_intention)
         return value
+    
+    def save_model(self, filePath):
+        state = {
+            'state_dict': self.policy.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+        }
+        torch.save(state, filePath)
+        
+    def load_model(self, filePath):
+        state = torch.load(filePath)
+        self.policy.load_state_dict(state['state_dict'])
+        self.optimizer.load_state_dict(state['optimizer'])
 
 def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
     env.reset()
