@@ -7,6 +7,9 @@ import gymnasium
 import numpy as np
 import torch
 from skimage.draw import disk, line
+from skimage.transform import resize
+from skimage import util
+
 class Reward:
     CRASHING : float = -1.0
     ININFLATIONZONE : float = -0.5
@@ -33,7 +36,7 @@ class IntentionNavEnv(gymnasium.Env):
         self.curBestWaypointId = 0
         self.totalReward = 0
 
-        plt.figure(figsize=(8, 6), dpi=150)
+        plt.figure(figsize=(6, 6), dpi=200)
         
     def getObservations(self):
         return self.robot.getBinaryFeedbackImage(scaleFactor=4), float(self.curIntention)
@@ -97,7 +100,7 @@ class IntentionNavEnv(gymnasium.Env):
         return False
     
     
-    def render(self):
+    def render(self, feedbackImage: np.ndarray):
         img = np.copy(self.robot.mapImgWithPerfectOdomPlotted)
         
         # Plot the current position of the robot
@@ -114,8 +117,16 @@ class IntentionNavEnv(gymnasium.Env):
         rr, cc = line(robotImgY, robotImgX, endY, endX)
         img[rr, cc] = np.array([0, 255, 0])
 
+        # Get the odom image
+        feedbackImage = self.robot.convertBinaryFeedbackImageToColor(feedbackImage)
+        feedbackImageResized = resize(feedbackImage, (img.shape[0], img.shape[1]), anti_aliasing=True)
+        feedbackImageResized = util.img_as_ubyte(feedbackImageResized)
+
+        # Final Image
+        finalImg = np.concatenate([img, feedbackImageResized], axis=0)
+
         plt.clf()
-        plt.imshow(img)
+        plt.imshow(finalImg)
         plt.draw()
         plt.pause(0.01)
     
