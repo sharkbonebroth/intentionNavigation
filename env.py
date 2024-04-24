@@ -3,7 +3,6 @@ from utilTypes import Action, trajectoryType, find_closest_point, Intention, get
 from map import Map, MAPSCALE
 from typing import Tuple, List
 import matplotlib.pyplot as plt
-from skimage.transform import resize
 import gymnasium
 import numpy as np
 import torch
@@ -11,6 +10,7 @@ from skimage.draw import disk, line
 from params import NetParameters
 class Reward:
     CRASHING : float = -1.0
+    ININFLATIONZONE : float = -0.5
 
 class IntentionNavEnv(gymnasium.Env):
     MAX_STEPS = 10000
@@ -35,32 +35,16 @@ class IntentionNavEnv(gymnasium.Env):
         self.totalReward = 0
         
     def getObservations(self):
-        return self.robot.getBinaryFeedbackImage(sideLength=NetParameters.FOV_SIZE[0]), float(self.curIntention)
+        return self.robot.getBinaryFeedbackImage(scaleFactor=4), float(self.curIntention)
         
     def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
-        obs, intention = self.getObservations()
-        f, axarr = plt.subplots(3)
-        axarr[0].imshow(obs)
-        
         self.robot.move(Action(*action)) 
         
-        print("Action ex ", action)
         obs, intention = self.getObservations()
-        
-        axarr[1].imshow(obs)
-        
-        img_resized = resize(obs, (9,9))
-        
-        axarr[2].imshow(img_resized)
-        plt.show()
         
         curRobotPoseWorld = self.robot.getRobotPoseWorld()
         reward = self.get_reward(action, curRobotPoseWorld, self.prevRobotPoseWorld)
         done = self.is_done(curRobotPoseWorld)
-        
-        if self.robot.hasCrashedIntoWall():
-            reward = Reward.CRASHING
-            done = True
             
         self.prevRobotPoseWorld = curRobotPoseWorld
         
@@ -75,11 +59,14 @@ class IntentionNavEnv(gymnasium.Env):
         return obs, intention, reward, done, info
     
     def get_reward(self, action : np.ndarray, curRobotPos, prevRobotPos):
-        print("Cur robot pos ", curRobotPos)
         closestWaypointId = find_closest_point(curRobotPos[:2], self.curPath)
-        print("Closest waypt ", self.curPath[closestWaypointId])
         reward = closestWaypointId - self.curBestWaypointId
         reward *= 0.1
+        
+        if self.robot.hasCrashedIntoWall():
+            reward += Reward.CRASHING
+        elif self.robot.isInInflationZone():
+            reward += Reward.ININFLATIONZONE
         
         if closestWaypointId > self.curBestWaypointId:
             self.curBestWaypointId = closestWaypointId
@@ -97,6 +84,9 @@ class IntentionNavEnv(gymnasium.Env):
         # self.curIntention = self.intentions[self.trainingId]
     
     def is_done(self, curRobotPoseWorld):
+        if self.robot.hasCrashedIntoWall():
+            print("Crashed!!")
+            return True
         if get_distance(curRobotPoseWorld, self.endPoint) < 0.1:
             return True
         if self.steps >= IntentionNavEnv.MAX_STEPS:

@@ -44,6 +44,8 @@ class ActorCritic(nn.Module):
                                1, 0)
         self.pool3 = nn.MaxPool2d(2)
         
+        self.pool4 = nn.MaxPool2d(2)
+        
         self.fully_connected_1 = nn.Linear(NetParameters.VECTOR_LEN, NetParameters.INTENTION_SIZE)
         self.fully_connected_2 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
         self.fully_connected_3 = nn.Linear(NetParameters.NET_SIZE, NetParameters.NET_SIZE)
@@ -59,29 +61,23 @@ class ActorCritic(nn.Module):
         obs = torch.reshape(obs, (-1, self.num_channel, EnvParameters.FOV_SIZE, EnvParameters.FOV_SIZE))
         intention = torch.reshape(intention, (-1, NetParameters.VECTOR_LEN))
         
-        print(obs.shape)
-        
         # matrix input
         x_1 = F.relu(self.conv1(obs))
         x_1 = F.relu(self.conv1a(x_1))
         x_1 = F.relu(self.conv1b(x_1))
         x_1 = self.pool1(x_1)
         
-        print(x_1.shape)
-        
         x_1 = F.relu(self.conv2(x_1))
         x_1 = F.relu(self.conv2a(x_1))
         x_1 = F.relu(self.conv2b(x_1))
         x_1 = self.pool2(x_1)
-        
-        print(x_1.shape)
         
         x_1 = self.conv3(x_1)
         x_1 = self.conv3a(x_1)
         x_1 = self.conv3b(x_1)
         x_1 = self.pool3(x_1)
         
-        print(x_1.shape)
+        x_1 = self.pool4(x_1)
         
         x_1 = F.relu(x_1.view(x_1.size(0), -1))
         

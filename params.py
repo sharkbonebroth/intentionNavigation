@@ -1,7 +1,7 @@
 class NetParameters:
     NET_SIZE = 512
     INTENTION_SIZE = 8
-    FOV_SIZE = (50, 50, 2)
+    FOV_SIZE = (35, 35, 2)
     FOV_SIZE_RGB = (50,50,3)
     NUM_CHANNEL = 2
     # Intention Length
@@ -9,7 +9,8 @@ class NetParameters:
 
 class WandbSettings:
     ON = False
-    EXPERIMENT_NAME = "Testtrain1"
+    LOGGING_INTERVAL = 30
+    EXPERIMENT_NAME = "RealTrain"
     EXPERIMENT_PROJECT = "intentionNav"
 
 class EnvParameters:
@@ -30,7 +31,7 @@ class TrainingParameters:
     N_EPOCHS = 10
     N_ENVS = 1
     N_STEPS = 128
-    TOTAL_TIMESTEPS = 25000
+    TOTAL_TIMESTEPS = 5000
     ANNEAL_LR = True
     NUM_MINIBATCHES = 48
     MINIBATCH_SIZE = 64

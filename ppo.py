@@ -83,6 +83,7 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
     next_intention = torch.tensor(intention).to(device).view(-1)
     next_done = torch.zeros(TrainingParameters.N_ENVS).to(device)
     
+    start = time.time()
     for step in range(TrainingParameters.N_STEPS):
         global_step += 1 * TrainingParameters.N_ENVS
         buffer.observations[step] = next_obs
@@ -106,10 +107,12 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
         next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
         next_intention = torch.tensor(next_intention).to(device).view(-1)
         
-        print(f"global_step={global_step}, episodic_return={info['episode']['reward']}")
-        if WandbSettings.ON:
+        # print(f"global_step={global_step}, episodic_return={info['episode']['reward']}, episode_length={info['episode']['length']}")
+        if WandbSettings.ON and (step != 0)  and ((step % WandbSettings.LOGGING_INTERVAL) == 0):
+            print("Logging episodic metrics")
             wandb.log({"charts/episodic_return" : info["episode"]["reward"]}, global_step)
             wandb.log({"charts/episodic_length" : info["episode"]["length"]}, global_step)
+    print(f"{time.time() - start} seconds for an ep")
     return next_obs, next_intention, next_done, global_step
         
 def get_device() -> torch.device:

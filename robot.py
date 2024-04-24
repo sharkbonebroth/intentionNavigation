@@ -81,13 +81,13 @@ class Robot:
     return lidarImg
 
 
-  def getBinaryFeedbackImage(self, scalefactor: float = 1.0) -> np.ndarray:
+  def getBinaryFeedbackImage(self, scaleFactor: float = 1.0) -> np.ndarray:
     xActual, yActual, yawActual = self.currPositionActual
     
-    IMGSCALE = MAPSCALE * scalefactor
+    IMGSCALE = MAPSCALE * scaleFactor
 
     # Initialize the image for plotting
-    resizedShape = (int(self.map.mapGrid.shape[0]//scalefactor), int(self.map.mapGrid.shape[1]//scalefactor))
+    resizedShape = (int(self.map.mapGrid.shape[0]//scaleFactor), int(self.map.mapGrid.shape[1]//scaleFactor))
     resizedMapGrid = resize(self.map.mapGrid, resizedShape, anti_aliasing = False)
     odomPlotChannel = np.zeros(resizedShape, dtype=np.uint8)
     mapGridWithOdomChannel = np.dstack((odomPlotChannel, resizedMapGrid))
