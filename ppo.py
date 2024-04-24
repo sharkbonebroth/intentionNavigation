@@ -9,6 +9,8 @@ import time
 import gymnasium
 from env import IntentionNavEnv
 
+STD_SCALE = 0.1
+
 class ReplayBuffer:
     def __init__(self, num_steps : int, num_envs : int, obs_space_shape : tuple, act_space_shape : tuple):
         batch_shape = (num_steps, num_envs)
@@ -60,7 +62,7 @@ class PPO:
         obs = obs.to(self.device)
         onehot_intention = torch.from_numpy(getIntentionAsOnehot(intention, onehotSize=NetParameters.VECTOR_LEN)).to(self.device)
         action_mean, action_logstd, value = self.policy(obs, onehot_intention)
-        action_std = torch.exp(action_logstd)
+        action_std = STD_SCALE * torch.exp(action_logstd)
         probs = torch.distributions.Normal(action_mean, action_std)
         if action is None:
             action = probs.sample()
@@ -93,8 +95,12 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
         
         # Gym part
         next_obs, next_intention, reward, done, info = env.step(action.cpu().numpy().flatten())
-        done = np.array([done])
         buffer.rewards[step] = torch.tensor(reward).to(device).view(-1)
+        if done:
+            env.reset()
+            next_obs, next_intention = env.getObservations()
+            next_done = False
+        done = np.array([done])
         next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
         next_intention = torch.tensor(next_intention).to(device).view(-1)
         

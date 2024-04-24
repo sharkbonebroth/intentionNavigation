@@ -8,6 +8,9 @@ import gymnasium
 import numpy as np
 import torch
 
+class Reward:
+    CRASHING : float = -1.0
+
 class IntentionNavEnv(gymnasium.Env):
     MAX_STEPS = 10000
     def __init__(self, obs_space_shape : Tuple, pathsIn : List[trajectoryType], intentionsIn : List[Intention], mapIn : Map, startPoint, endPoint):
@@ -55,7 +58,7 @@ class IntentionNavEnv(gymnasium.Env):
         done = self.is_done(curRobotPoseWorld)
         
         if self.robot.hasCrashedIntoWall():
-            reward = -1.0
+            reward = Reward.CRASHING
             done = True
             
         self.prevRobotPoseWorld = curRobotPoseWorld
