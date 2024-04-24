@@ -7,9 +7,6 @@ import gymnasium
 import numpy as np
 import torch
 from skimage.draw import disk, line
-from skimage.transform import resize
-from skimage import util
-
 class Reward:
     CRASHING : float = -1.0
     ININFLATIONZONE : float = -0.5
@@ -35,19 +32,17 @@ class IntentionNavEnv(gymnasium.Env):
         
         self.curBestWaypointId = 0
         self.totalReward = 0
-
-        plt.figure(figsize=(6, 6), dpi=200)
         
     def getObservations(self):
         return self.robot.getBinaryFeedbackImage(scaleFactor=4), float(self.curIntention)
         
-    def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
+    def step(self, action : np.ndarray, inverseCount) -> Tuple[np.ndarray, float, bool, dict]:
         self.robot.move(Action(*action)) 
         
         obs, intention = self.getObservations()
         
         curRobotPoseWorld = self.robot.getRobotPoseWorld()
-        reward = self.get_reward(action, curRobotPoseWorld, self.prevRobotPoseWorld)
+        reward, inverse = self.get_reward(action, curRobotPoseWorld, self.prevRobotPoseWorld, inverseCount)
         done = self.is_done(curRobotPoseWorld)
             
         self.prevRobotPoseWorld = curRobotPoseWorld
@@ -59,15 +54,17 @@ class IntentionNavEnv(gymnasium.Env):
             'reward' : self.totalReward / self.steps,
             'length' : self.steps
         }
-        return obs, intention, reward, done, info
+        return obs, intention, reward, inverse, done, info
     
-    def get_reward(self, action : np.ndarray, curRobotPos, prevRobotPos):
+    def get_reward(self, action : np.ndarray, curRobotPos, prevRobotPos, inverseCount):
         closestWaypointId = find_closest_point(curRobotPos[:2], self.curPath)
         
         inverse = 1
         if self.curBestWaypointId > closestWaypointId:
             inverse *= -1
-        reward = inverse * get_distance(self.curPath[closestWaypointId], self.curPath[self.curBestWaypointId])
+            if inverseCount>=5: #momentum
+                inverse *= 2.0 #double the backward movement reward
+        reward = inverse * get_distance(curRobotPos, self.curPath[self.curBestWaypointId])
         
         if self.robot.hasCrashedIntoWall():
             reward += Reward.CRASHING
@@ -76,7 +73,7 @@ class IntentionNavEnv(gymnasium.Env):
         
         if closestWaypointId > self.curBestWaypointId:
             self.curBestWaypointId = closestWaypointId
-        return reward
+        return reward, inverse==-1
     
     def reset(self):
         self.steps = 0
@@ -100,7 +97,7 @@ class IntentionNavEnv(gymnasium.Env):
         return False
     
     
-    def render(self, feedbackImage: np.ndarray):
+    def render(self):
         img = np.copy(self.robot.mapImgWithPerfectOdomPlotted)
         
         # Plot the current position of the robot
@@ -112,23 +109,13 @@ class IntentionNavEnv(gymnasium.Env):
 
         # Plot its angle
         robotYaw = robotPosition[2]
-        endX = int(np.cos(robotYaw) * 10) + robotImgX
-        endY = int(np.sin(robotYaw) * 10) + robotImgY
+        endX = np.cos(robotYaw) * 10
+        endY = np.sin(robotYaw) * 10
         rr, cc = line(robotImgY, robotImgX, endY, endX)
         img[rr, cc] = np.array([0, 255, 0])
 
-        # Get the odom image
-        feedbackImage = self.robot.convertBinaryFeedbackImageToColor(feedbackImage)
-        feedbackImageResized = resize(feedbackImage, (img.shape[0], img.shape[1]), anti_aliasing=True)
-        feedbackImageResized = util.img_as_ubyte(feedbackImageResized)
-
-        # Final Image
-        finalImg = np.concatenate([img, feedbackImageResized], axis=0)
-
-        plt.clf()
-        plt.imshow(finalImg)
-        plt.draw()
-        plt.pause(0.01)
+        plt.imshow(img)
+        plt.show()
     
 class DummyIntentionNavEnv(gymnasium.Env):
     def __init__(self, obs_space_shape):

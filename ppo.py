@@ -82,6 +82,7 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
     next_done = torch.zeros(TrainingParameters.N_ENVS).to(device)
     
     start = time.time()
+    inverseCount = 0
     for step in range(TrainingParameters.N_STEPS):
         global_step += 1 * TrainingParameters.N_ENVS
         buffer.observations[step] = next_obs
@@ -95,7 +96,13 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
         buffer.logprobs[step] = logprob
         
         # Gym part
-        next_obs, next_intention, reward, done, info = env.step(action.cpu().numpy().flatten())
+        
+        next_obs, next_intention, reward, inverse, done, info = env.step(action.cpu().numpy().flatten(),inverseCount)
+        if inverse:
+            inverseCount += 1
+        else:
+            inverseCount = 0
+        
         env.render(next_obs)
         buffer.rewards[step] = torch.tensor(reward).to(device).view(-1)
         if done:
