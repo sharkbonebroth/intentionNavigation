@@ -28,6 +28,7 @@ class Robot:
     self.currPositionActual = (startX,startY,yaw) # keep track of robot current position; no gaussian noise; In world frame
     self.currPositionEstimate = (startX,startY,yaw) # in world framne
     self.odometry = []
+    self.mapImgWithPerfectOdomPlotted = np.copy(self.map.colorImageNpArray) # Used for visualization of robot path
   
   def addGaussianNoise(self, value: float, variance: float = 0.05):
     return value + np.random.normal(0, variance)
