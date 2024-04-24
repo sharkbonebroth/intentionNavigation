@@ -93,6 +93,7 @@ class PPO:
 
 best_episode_reward = -float('inf')
 def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
+    global best_episode_reward
     env.reset()
     obs, intention = env.getObservations()
     next_obs = torch.Tensor(obs).to(device)
@@ -127,6 +128,7 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
         episode_reward = info["episode"]["reward"]
         
         if episode_reward > best_episode_reward:
+            best_episode_reward = episode_reward
             best_weights = ppo.get_state()
         
         print(f"global_step={global_step}, episodic_return={info['episode']['reward']}, episode_length={info['episode']['length']}")
