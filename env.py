@@ -11,8 +11,10 @@ from skimage.transform import resize
 from skimage import util
 
 class Reward:
-    CRASHING : float = -1.0
+    CRASHING : float = -2.0
     ININFLATIONZONE : float = -0.5
+    REGRESSPOINTPENALTY: float = -0.2
+    MAXPROGRESSPOINTREWARD: float = 0.2
 
 class IntentionNavEnv(gymnasium.Env):
     MAX_STEPS = 10000
@@ -33,6 +35,7 @@ class IntentionNavEnv(gymnasium.Env):
         self.curPath = self.paths[self.trainingId]
         self.curIntention = self.intentions[self.trainingId]
         
+        self.prevWaypointID = 0
         self.curBestWaypointId = 0
         self.totalReward = 0
 
@@ -63,11 +66,13 @@ class IntentionNavEnv(gymnasium.Env):
     
     def get_reward(self, action : np.ndarray, curRobotPos, prevRobotPos):
         closestWaypointId = find_closest_point(curRobotPos[:2], self.curPath)
-        
-        inverse = 1
-        if self.curBestWaypointId > closestWaypointId:
-            inverse *= -1
-        reward = inverse * get_distance(self.curPath[closestWaypointId], self.curPath[self.curBestWaypointId])
+
+        if closestWaypointId >= self.prevWaypointID:
+            # Reward proportional to how close it is to the closest waypoint
+            reward = Reward.MAXPROGRESSPOINTREWARD / (1 + get_distance(self.robot.currPositionActual, self.curPath[closestWaypointId]))
+        else:
+            # Penalize!
+            reward = Reward.REGRESSPOINTPENALTY - get_distance(self.robot.currPositionActual, self.curPath[self.curBestWaypointId])
         
         if self.robot.hasCrashedIntoWall():
             reward += Reward.CRASHING
@@ -76,6 +81,9 @@ class IntentionNavEnv(gymnasium.Env):
         
         if closestWaypointId > self.curBestWaypointId:
             self.curBestWaypointId = closestWaypointId
+        
+        self.prevWaypointID = closestWaypointId
+
         return reward
     
     def reset(self):
