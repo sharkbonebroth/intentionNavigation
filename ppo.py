@@ -3,8 +3,6 @@ import numpy as np
 from params import TrainingParameters, EnvParameters, NetParameters, WandbSettings
 import gymnasium
 
-from skimage.transform import resize
-
 from dataLoader import DataLoader
 import wandb
 import time

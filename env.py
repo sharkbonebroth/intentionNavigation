@@ -7,7 +7,6 @@ import gymnasium
 import numpy as np
 import torch
 from skimage.draw import disk, line
-from params import NetParameters
 class Reward:
     CRASHING : float = -1.0
     ININFLATIONZONE : float = -0.5
@@ -57,13 +56,15 @@ class IntentionNavEnv(gymnasium.Env):
             'reward' : self.totalReward / self.steps,
             'length' : self.steps
         }
-        
         return obs, intention, reward, done, info
     
     def get_reward(self, action : np.ndarray, curRobotPos, prevRobotPos):
         closestWaypointId = find_closest_point(curRobotPos[:2], self.curPath)
-        reward = closestWaypointId - self.curBestWaypointId
-        reward *= 0.1
+        
+        inverse = 1
+        if self.curBestWaypointId > closestWaypointId:
+            inverse *= -1
+        reward = inverse * get_distance(self.curPath[closestWaypointId], self.curPath[self.curBestWaypointId])
         
         if self.robot.hasCrashedIntoWall():
             reward += Reward.CRASHING
