@@ -15,6 +15,9 @@ class Reward:
     ININFLATIONZONE : float = -0.5
     REGRESSPOINTPENALTY: float = -0.2
     MAXPROGRESSPOINTREWARD: float = 0.2
+    STAGNATEPENALTY: float = -0.05
+    VELOCITYTOOLOWPENALTY: float -0.02
+    VELOCITYTOOLOWTHRESHOLD: float = 1
 
 class IntentionNavEnv(gymnasium.Env):
     MAX_STEPS = 10000
@@ -38,6 +41,7 @@ class IntentionNavEnv(gymnasium.Env):
         self.prevWaypointID = 0
         self.curBestWaypointId = 0
         self.totalReward = 0
+        self.prevClosestDistance = 100000
 
         plt.figure(figsize=(6, 6), dpi=200)
         
@@ -70,6 +74,10 @@ class IntentionNavEnv(gymnasium.Env):
         if closestWaypointId >= self.prevWaypointID:
             # Reward proportional to how close it is to the closest waypoint
             reward = Reward.MAXPROGRESSPOINTREWARD / (1 + get_distance(self.robot.currPositionActual, self.curPath[closestWaypointId]))
+            
+            # Penalize if it stagnates
+            if closestWaypointId == self.prevWaypointID:
+                reward += Reward.STAGNATEPENALTY
         else:
             # Penalize!
             reward = Reward.REGRESSPOINTPENALTY - get_distance(self.robot.currPositionActual, self.curPath[self.curBestWaypointId])
@@ -78,6 +86,9 @@ class IntentionNavEnv(gymnasium.Env):
             reward += Reward.CRASHING
         elif self.robot.isInInflationZone():
             reward += Reward.ININFLATIONZONE
+
+        if action[0] < Reward.VELOCITYTOOLOWTHRESHOLD:
+            reward += Reward.VELOCITYTOOLOWPENALTY
         
         if closestWaypointId > self.curBestWaypointId:
             self.curBestWaypointId = closestWaypointId
