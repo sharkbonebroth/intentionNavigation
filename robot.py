@@ -4,9 +4,10 @@ from map import Map
 from scipy import ndimage
 import math
 from utilTypes import Action
+from map import MAPSCALE
+from skimage.transform import resize
 
 odometryDataPointType = Tuple[float, float] # delta x, delta y
-MAPSCALE = 0.05 # each pixel is 0.05m
 LIDARRANGE = 7
 FOV_SIDE_SIZE = int(LIDARRANGE/MAPSCALE + 1)
 FOV_SIZE = (FOV_SIDE_SIZE, FOV_SIDE_SIZE) # LIDARRANGE / MAPSCALE * 2 + 1
@@ -78,7 +79,71 @@ class Robot:
     
     lidarImg = lidarImgUncroppedRotated[startY:endY, startX:endX]
     return lidarImg
+
+  def getBinaryFeedbackImage(self, sideLength: int = 141) -> np.ndarray:
+    xActual, yActual, yawActual = self.currPositionActual
+
+    # Initialize the image for plotting
+    odomPlotChannel = np.zeros(self.map.mapGrid.shape)
+    mapGridWithOdomChannel = np.dstack((odomPlotChannel, self.map.mapGrid))
+
+    # Plot the odometry estimates on the odom channel
+    xBeingPlotted = xActual
+    yBeingPlotted = yActual
+    odomToPlot = self.getNLatestOdometries(self.numOdomToPlot)
+    for odom in odomToPlot: # loop will miss the last one but wtv
+      dx, dy = odom
+
+      xBeingPlottedDiscretized = int(xBeingPlotted / MAPSCALE)
+      yBeingPlottedDiscretized = int(yBeingPlotted / MAPSCALE)
+
+      mapGridWithOdomChannel[yBeingPlottedDiscretized][xBeingPlottedDiscretized][0] = 1
+
+      xBeingPlotted = xBeingPlotted - dx
+      yBeingPlotted = yBeingPlotted - dy  
+
+    # Crop the lidar reading image out
+    lidarRangeCroppedPx = math.floor(LIDARRANGE/MAPSCALE)
+    lidarRangeUncroppedPx = int(np.ceil(lidarRangeCroppedPx * math.sqrt(2))) #5m vision range, account for potential cropping later
+    lidarImgUncroppedSize = int(2 * lidarRangeUncroppedPx + 1)
+    lidarImgUncropped = np.zeros((lidarImgUncroppedSize, lidarImgUncroppedSize, 2), dtype=np.uint8)
+    xActualImgCoord = int(xActual/MAPSCALE)
+    yActualImgCoord = int(yActual/MAPSCALE)
+    for yCoordLidarImg, yCoordOdomImg in enumerate(range(yActualImgCoord - lidarRangeUncroppedPx, yActualImgCoord + lidarRangeUncroppedPx + 1)):
+      for XCoordLidarImg, xCoordOdomImg in enumerate(range(xActualImgCoord - lidarRangeUncroppedPx, xActualImgCoord + lidarRangeUncroppedPx + 1)):
+        if yCoordOdomImg < 0 or yCoordOdomImg >= self.map.height or xCoordOdomImg < 0 or xCoordOdomImg >= self.map.width:
+          continue
+        else:
+          lidarImgUncropped[yCoordLidarImg][XCoordLidarImg] = mapGridWithOdomChannel[yCoordOdomImg][xCoordOdomImg]
+
+    # rotate and Crop the uncropped lidar image in the center
+    lidarImgUncroppedRotated = ndimage.rotate(lidarImgUncropped, yawActual*180/np.pi, reshape=False)
+    centerX = lidarRangeUncroppedPx + 1
+
+    startX = centerX - lidarRangeCroppedPx
+    endX = centerX + lidarRangeCroppedPx + 1
+    startY = startX
+    endY = endX
     
+    lidarImg = lidarImgUncroppedRotated[startY:endY, startX:endX]
+
+    if sideLength != lidarImg.shape[0]:
+      lidarImg = resize(lidarImg, (sideLength, sideLength), anti_aliasing = False)
+
+    return lidarImg
+
+  def convertBinaryFeedbackImageToColor(self, binaryFeedbackImage: np.ndarray) -> np.ndarray:
+    colorImg = np.zeros((binaryFeedbackImage.shape[0], binaryFeedbackImage.shape[1], 3), dtype=np.uint8)
+    for i in range(binaryFeedbackImage.shape[0]):
+      for j in range(binaryFeedbackImage.shape[1]):
+        if not binaryFeedbackImage[i][j][1]:
+          colorImg[i][j] = np.array([255, 255, 255])
+        if binaryFeedbackImage[i][j][0]:
+          colorImg[i][j] = np.array([255, 0, 0])
+
+    return colorImg
+
+
   #get the latest n odometry points
   def getNLatestOdometries(self, n: int):
     if n > len(self.odometry):

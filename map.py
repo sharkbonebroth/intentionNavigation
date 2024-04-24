@@ -6,7 +6,7 @@ from typing import Tuple
 from scipy import ndimage
 from skimage.draw import rectangle
 
-MAPSCALE = 0.05 # each pixel is 0.05m
+MAPSCALE = 0.1 # each pixel is 0.1m
 
 class Map:
   def __init__(self, mapGrid: np.ndarray):
@@ -35,10 +35,10 @@ class Map:
 
   def getInflationZoneGrid(self, mapGrid):
     structuringElement = ndimage.generate_binary_structure(2, 1)
-    structuringElement = ndimage.iterate_structure(structuringElement, 20).astype(bool)
+    structuringElement = ndimage.iterate_structure(structuringElement, 10).astype(bool)
     return ndimage.binary_dilation(mapGrid, structure=structuringElement).astype(mapGrid.dtype)
 
-  def getColorImageNpArray(self):
+  def getColorImageNpArray(self, scaleFactor: int = 1):
     colorImageNpArray = np.zeros((self.height, self.width, 3), "uint8")
     
     for i in range(self.height):
@@ -52,6 +52,9 @@ class Map:
             colorImageNpArray[i][j][0] = 255
             colorImageNpArray[i][j][1] = 255
             colorImageNpArray[i][j][2] = 255
+
+    if scaleFactor != 1:
+      colorImageNpArray = colorImageNpArray.repeat(scaleFactor, axis=0).repeat(scaleFactor, axis=1)
 
     return colorImageNpArray
 

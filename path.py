@@ -54,11 +54,11 @@ class AStarTrajectorySolver:
 
     # Perform dilation operation for inflation zones
     structuringElement = ndimage.generate_binary_structure(2, 1)
-    structuringElement = ndimage.iterate_structure(structuringElement, 20).astype(bool)
+    structuringElement = ndimage.iterate_structure(structuringElement, 10).astype(bool)
     mapGridInflated = ndimage.binary_dilation(mapGrid, structure=structuringElement).astype(mapGrid.dtype)
 
     # Downsample map
-    downsampleRate = 4 # Assuming a map scale of 1 px to 5cm, this downsamples it to 1 px per 20cm
+    downsampleRate = 2 # Assuming a map scale of 1 px to 10cm, this downsamples it to 1 px per 20cm
     mapGridDownsampled = mapGridInflated[::downsampleRate, ::downsampleRate]
     startPointDownSampled = (int(startPoint[0] / downsampleRate), int(startPoint[1] / downsampleRate))
     endPointDownSampled = (int(endPoint[0] / downsampleRate), int(endPoint[1] / downsampleRate))
