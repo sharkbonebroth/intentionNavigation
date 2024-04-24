@@ -106,7 +106,7 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
         next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
         next_intention = torch.tensor(next_intention).to(device).view(-1)
         
-        # print(f"global_step={global_step}, episodic_return={info['episode']['reward']}, episode_length={info['episode']['length']}")
+        print(f"global_step={global_step}, episodic_return={info['episode']['reward']}, episode_length={info['episode']['length']}")
         if WandbSettings.ON and (step != 0)  and ((step % WandbSettings.LOGGING_INTERVAL) == 0):
             print("Logging episodic metrics")
             wandb.log({"charts/episodic_return" : info["episode"]["reward"]}, global_step)

@@ -23,7 +23,7 @@ class IntentionNavEnv(gymnasium.Env):
         self.obs_space_shape : tuple = obs_space_shape
         self.paths : List[trajectoryType] = pathsIn
         self.map : Map = mapIn
-        self.robot = Robot(map=mapIn, startX=startPoint[0], startY=startPoint[1], yaw=startPoint[2])
+        self.robot = Robot(map=mapIn, startX=startPoint[0], startY=startPoint[1], yaw=startPoint[2], numOdomToPlot=200)
         self.steps = 0
         self.prevRobotPoseWorld = self.robot.currPositionActual
         self.intentions = intentionsIn
@@ -91,6 +91,7 @@ class IntentionNavEnv(gymnasium.Env):
         self.totalReward = 0
         self.prevRobotPoseWorld = self.startPoint
         self.robot.reset(*self.startPoint)
+        self.curBestWaypointId = 0
         # if self.trainingId >= len(self.paths):
         #     return np.zeros((640,480))
         # self.trainingId +=1
