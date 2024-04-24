@@ -1,13 +1,14 @@
 import torch
 import numpy as np
 from params import TrainingParameters, EnvParameters, NetParameters, WandbSettings
-from net import ActorCritic, product
-from utilTypes import getIntentionAsOnehot
+import gymnasium
+
 from dataLoader import DataLoader
 import wandb
 import time
-import gymnasium
+from net import product, ActorCritic
 from env import IntentionNavEnv
+from utilTypes import getIntentionAsOnehot
 
 STD_SCALE = 0.1
 
@@ -152,7 +153,6 @@ if __name__ == "__main__":
         print('Launching wandb...\n')
 
     # TODO (Nielsen): Parallelize across multiple environments
-    
     batch_size = TrainingParameters.N_STEPS * TrainingParameters.N_ENVS
     
     ppo = PPO(device, EnvParameters.OBS_SPACE_SHAPE, EnvParameters.ACT_SPACE_SHAPE)

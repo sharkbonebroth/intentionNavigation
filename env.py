@@ -1,13 +1,13 @@
 from robot import Robot
 from utilTypes import Action, trajectoryType, find_closest_point, Intention, get_distance
-from map import Map
+from map import Map, MAPSCALE
 from typing import Tuple, List
 import matplotlib.pyplot as plt
 from skimage.transform import resize
 import gymnasium
 import numpy as np
 import torch
-
+from skimage.draw import disk, line
 class Reward:
     CRASHING : float = -1.0
 
@@ -101,6 +101,27 @@ class IntentionNavEnv(gymnasium.Env):
         if self.steps >= IntentionNavEnv.MAX_STEPS:
             return True
         return False
+    
+    
+    def render(self):
+        img = np.copy(self.robot.mapImgWithPerfectOdomPlotted)
+        
+        # Plot the current position of the robot
+        robotPosition = self.robot.currPositionActual
+        robotImgX = int(robotPosition[0] / MAPSCALE)
+        robotImgY = int(robotPosition[1] / MAPSCALE)
+        rr, cc = disk(center = (robotImgY, robotImgX), radius = 5)
+        img[rr, cc] = np.array([0, 0, 255])
+
+        # Plot its angle
+        robotYaw = robotPosition[2]
+        endX = np.cos(robotYaw) * 10
+        endY = np.sin(robotYaw) * 10
+        rr, cc = line(robotImgY, robotImgX, endY, endX)
+        img[rr, cc] = np.array([0, 255, 0])
+
+        plt.imshow(img)
+        plt.show()
     
 class DummyIntentionNavEnv(gymnasium.Env):
     def __init__(self, obs_space_shape):

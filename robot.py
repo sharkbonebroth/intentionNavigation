@@ -21,6 +21,7 @@ class Robot:
     self.map = map
     self.numOdomToPlot = numOdomToPlot
     self.noiseVariance = noiseVariance
+    self.mapImgWithPerfectOdomPlotted = np.copy(self.map.colorImageNpArray) # Used for visualization of robot path
     
   def reset(self, startX: float, startY: float, yaw: float):
     self.currPositionActual = (startX,startY,yaw) # keep track of robot current position; no gaussian noise; In world frame
@@ -144,6 +145,11 @@ class Robot:
 
     # Add noisy odom to odometry
     self.odometry.append((dxWorldFrameEstimate, dyWorldFrameEstimate))
+
+    # Plot perfect odometry on self.mapImgWithPerfectOdomPlotted
+    currXWorldActualDiscretized = int(currXWorldActual / MAPSCALE)
+    currYWorldActualDiscretized = int(currYWorldActual / MAPSCALE)
+    self.mapImgWithPerfectOdomPlotted[currYWorldActualDiscretized][currXWorldActualDiscretized] = np.array([255,0,0])
 
 # Class implementating the low level controller, which will be used to control the robot to follow the waypoints. This 
 # is not used in training (the simulated odometry with gaussian noise is used instead), but will be useful in evaluation
