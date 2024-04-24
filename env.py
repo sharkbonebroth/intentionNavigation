@@ -11,8 +11,8 @@ from skimage.transform import resize
 from skimage import util
 
 class Reward:
-    CRASHING : float = -1.0
-    ININFLATIONZONE : float = -0.5
+    CRASHING : float = -2.0
+    ININFLATIONZONE : float = -1.0
 
 class IntentionNavEnv(gymnasium.Env):
     MAX_STEPS = 10000
@@ -21,7 +21,7 @@ class IntentionNavEnv(gymnasium.Env):
         self.obs_space_shape : tuple = obs_space_shape
         self.paths : List[trajectoryType] = pathsIn
         self.map : Map = mapIn
-        self.robot = Robot(map=mapIn, startX=startPoint[0], startY=startPoint[1], yaw=startPoint[2])
+        self.robot = Robot(map=mapIn, startX=startPoint[0], startY=startPoint[1], yaw=startPoint[2], numOdomToPlot=200)
         self.steps = 0
         self.prevRobotPoseWorld = self.robot.currPositionActual
         self.intentions = intentionsIn
@@ -65,9 +65,12 @@ class IntentionNavEnv(gymnasium.Env):
         closestWaypointId = find_closest_point(curRobotPos[:2], self.curPath)
         
         inverse = 1
-        if self.curBestWaypointId > closestWaypointId:
+        if closestWaypointId < self.curBestWaypointId:
             inverse *= -1
-        reward = inverse * get_distance(self.curPath[closestWaypointId], self.curPath[self.curBestWaypointId])
+        distToTarget = get_distance(curRobotPos, self.curPath[self.curBestWaypointId])
+        reward = inverse * distToTarget
+        reward += abs(action[0])
+        # reward = 1 / (1+distToTarget)
         
         if self.robot.hasCrashedIntoWall():
             reward += Reward.CRASHING
@@ -83,6 +86,7 @@ class IntentionNavEnv(gymnasium.Env):
         self.totalReward = 0
         self.prevRobotPoseWorld = self.startPoint
         self.robot.reset(*self.startPoint)
+        self.curBestWaypointId = 0
         # if self.trainingId >= len(self.paths):
         #     return np.zeros((640,480))
         # self.trainingId +=1
