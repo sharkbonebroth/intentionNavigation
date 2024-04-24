@@ -9,6 +9,7 @@ import time
 from net import product, ActorCritic
 from env import IntentionNavEnv
 from utilTypes import getIntentionAsOnehot
+import os
 
 STD_SCALE = 0.8
 class ReplayBuffer:
@@ -55,6 +56,8 @@ class PPO:
             {'params' : self.policy.parameters(), 'lr' : TrainingParameters.lr_actor}
         ])
         
+        self.best_weights = {}
+        
         self.obs_space_shape = product(obs_space_shape)
         self.action_space_shape = product(action_space_shape)
         
@@ -74,11 +77,13 @@ class PPO:
         _, _, value = self.policy(obs, onehot_intention)
         return value
     
-    def save_model(self, filePath):
-        state = {
+    def get_state(self):
+        return {
             'state_dict': self.policy.state_dict(),
             'optimizer': self.optimizer.state_dict(),
         }
+    
+    def save_model(self, state, filePath):
         torch.save(state, filePath)
         
     def load_model(self, filePath):
@@ -86,6 +91,7 @@ class PPO:
         self.policy.load_state_dict(state['state_dict'])
         self.optimizer.load_state_dict(state['optimizer'])
 
+best_episode_reward = -float('inf')
 def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
     env.reset()
     obs, intention = env.getObservations()
@@ -118,10 +124,17 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
         next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
         next_intention = torch.tensor(next_intention).to(device).view(-1)
         
+        episode_reward = info["episode"]["reward"]
+        
+        if episode_reward > best_episode_reward:
+            best_weights = ppo.get_state()
+        
         print(f"global_step={global_step}, episodic_return={info['episode']['reward']}, episode_length={info['episode']['length']}")
         if WandbSettings.ON and (step != 0)  and ((step % WandbSettings.LOGGING_INTERVAL) == 0):
+            ppo.save_model(ppo.get_state(), f"{NetParameters.MODEL_FOLDER}/latest.pth")
+            ppo.save_model(best_weights, f"{NetParameters.MODEL_FOLDER}/best.pth")
             print("Logging episodic metrics")
-            wandb.log({"charts/episodic_return" : info["episode"]["reward"]}, global_step)
+            wandb.log({"charts/episodic_return" : episode_reward}, global_step)
             wandb.log({"charts/episodic_length" : info["episode"]["length"]}, global_step)
     print(f"{time.time() - start} seconds for an ep")
     return next_obs, next_intention, next_done, global_step
@@ -167,10 +180,14 @@ if __name__ == "__main__":
         print('id is:{}'.format(wandb_id))
         print('Launching wandb...\n')
 
+    model_directory = "./models"
+    if not os.path.exists(model_directory):
+        os.makedirs(model_directory)
     # TODO (Nielsen): Parallelize across multiple environments
     batch_size = TrainingParameters.N_STEPS * TrainingParameters.N_ENVS
-    
     ppo = PPO(device, EnvParameters.OBS_SPACE_SHAPE, EnvParameters.ACT_SPACE_SHAPE)
+    if NetParameters.LOAD_MODEL:
+        ppo.load_model(NetParameters.MODEL_PATH)
     buffer = ReplayBuffer(TrainingParameters.N_STEPS, TrainingParameters.N_ENVS, EnvParameters.OBS_SPACE_SHAPE, EnvParameters.ACT_SPACE_SHAPE)
     env = get_env()
     

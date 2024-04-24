@@ -6,6 +6,9 @@ class NetParameters:
     NUM_CHANNEL = 2
     # Intention Length
     VECTOR_LEN = 3  # [intention, action t-1 maybe?] (Primal vector length ) : [dx, dy, d total, action t-1]
+    LOAD_MODEL = False
+    MODEL_FOLDER = "./models"
+    MODEL_PATH = "./models/latest.pth"
 
 class WandbSettings:
     ON = False
