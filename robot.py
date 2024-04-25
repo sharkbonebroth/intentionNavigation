@@ -208,6 +208,12 @@ class Robot:
     currXWorldActual = prevXWorldActual + dxWorldFrameActual
     currYWorldActual = prevYWorldActual + dyWorldFrameActual
     currYawWorldActual = prevYawWorldActual + dYaw
+
+    if (currYawWorldActual > math.pi):
+      currYawWorldActual -= 2 * math.pi
+    if (currYawWorldActual < -math.pi):
+      currYawWorldActual += 2 * math.pi
+
     self.currPositionActual = (currXWorldActual, currYWorldActual, currYawWorldActual) # Update the current position of the robot
 
     # Update noisy estimates
