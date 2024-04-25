@@ -1,7 +1,7 @@
 from robot import Robot
-from utilTypes import Action, trajectoryType, find_closest_point, Intention, get_distance
+from utilTypes import Action, find_closest_point, get_distance
 from map import Map, MAPSCALE
-from typing import Tuple, List
+from typing import Tuple
 import matplotlib.pyplot as plt
 import gymnasium
 import numpy as np
@@ -10,26 +10,34 @@ from skimage.draw import disk, line
 from skimage.transform import resize
 from skimage import util
 from dataLoader import DataLoader, TrainingDataPoint
+import enum
 
-class DoneState:
+class DoneState(int, enum.Enum):
     NOT_DONE = 0
     CRASH = 1
     GOAL = 2
     MAX_STEPS = 3
 
 class Reward:
-    CRASHING : float = -2.0
-    ININFLATIONZONE : float = -0.5
+    CRASHING : float = -5.0
+    ININFLATIONZONE : float = -2.5
     REGRESSPOINTPENALTY: float = -0.2
     MAXPROGRESSPOINTREWARD: float = 0.2
     STAGNATEPENALTY: float = -0.05
     VELOCITYTOOLOWPENALTY: float = -0.02
     VELOCITYTOOLOWTHRESHOLD: float = 1.0
     GOAL : float = 5.0
+    ACTION : float = -0.3
+
+MAX_ANG_VELOCITY = np.pi
+MAX_LIN_VELOCITY = 3.0
+MIN_LIN_VELOCITY = -1.0
 
 class IntentionNavEnv(gymnasium.Env):
     MAX_STEPS = 10000
     def __init__(self, obs_space_shape : Tuple, dataLoader: DataLoader):
+        self.action_space = gymnasium.spaces.Box(np.array([MIN_LIN_VELOCITY,-MAX_ANG_VELOCITY]), np.array([MAX_LIN_VELOCITY,MAX_ANG_VELOCITY])) 
+        
         self.dataLoader = dataLoader
         currLabelledData, map = self.dataLoader.getLabelledDataAndMap()
         self.setLabelledDataAndMap(currLabelledData, map)
@@ -60,6 +68,8 @@ class IntentionNavEnv(gymnasium.Env):
         return self.robot.getBinaryFeedbackImage(scaleFactor=4), float(self.curIntention)
         
     def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
+        action = np.clip(action, self.action_space.low, self.action_space.high)
+        
         self.robot.move(Action(*action)) 
         
         obs, intention = self.getObservations()
@@ -67,6 +77,10 @@ class IntentionNavEnv(gymnasium.Env):
         curRobotPoseWorld = self.robot.getRobotPoseWorld()
         doneState = self.is_done(curRobotPoseWorld)
         reward = self.get_reward(action, curRobotPoseWorld, doneState)
+        
+        # Reward clipping
+        # reward = np.clip(reward, -10, 10)
+        
         done = doneState != DoneState.NOT_DONE
             
         self.prevRobotPoseWorld = curRobotPoseWorld
@@ -108,30 +122,36 @@ class IntentionNavEnv(gymnasium.Env):
         # self.prevWaypointID = closestWaypointId
 
         # return reward
-
+        
+        if doneState == DoneState.GOAL:
+            return Reward.GOAL
+        elif self.robot.hasCrashedIntoWall():
+            return Reward.CRASHING
         closestWaypointId = find_closest_point(curRobotPos[:2], self.curPath)
+        
+        reward = Reward.ACTION
         
         inverse = 1
         if closestWaypointId < self.curBestWaypointId:
             inverse *= -1
         distToTarget = get_distance(curRobotPos, self.curPath[self.curBestWaypointId])
         reward = inverse * distToTarget
-        reward += abs(action[0])
+        reward += abs(action[0]) * 0.1
+        
+        # TODO: get angle2goal cost
+        
         # reward = 1 / (1+distToTarget)
         
-        if self.robot.hasCrashedIntoWall():
-            reward += Reward.CRASHING
-        elif self.robot.isInInflationZone():
+        if self.robot.isInInflationZone():
             reward += Reward.ININFLATIONZONE
-        elif doneState == DoneState.GOAL:
-            reward += Reward.GOAL
         
         if closestWaypointId > self.curBestWaypointId:
             self.curBestWaypointId = closestWaypointId
         return reward
     
     def reset(self):
-        currLabelledData, map = self.dataLoader.getLabelledDataAndMap()
+        # currLabelledData, map = self.dataLoader.getLabelledDataAndMap()
+        currLabelledData, map = self.dataLoader.getLabelledDataAndMapAtId(0)
         self.setLabelledDataAndMap(currLabelledData, map)
         # if self.trainingId >= len(self.paths):
         #     return np.zeros((640,480))
@@ -144,7 +164,7 @@ class IntentionNavEnv(gymnasium.Env):
         if self.robot.hasCrashedIntoWall():
             print("Crashed!!")
             return DoneState.CRASH
-        if abs(len(self.curPath) - self.curBestWaypointId) < 10:
+        if abs(len(self.curPath) - self.curBestWaypointId) < 5:
             print("GOALLLLL!!!!")
             return DoneState.GOAL
         if get_distance(curRobotPoseWorld, self.endPoint) < 0.1:

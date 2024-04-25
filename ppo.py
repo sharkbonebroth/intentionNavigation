@@ -116,7 +116,8 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
         
         # Gym part
         next_obs, next_intention, reward, done, info = env.step(action.cpu().numpy().flatten())
-        env.render(next_obs)
+        if EnvParameters.RENDER:
+            env.render(next_obs)
         buffer.rewards[step] = torch.tensor(reward).to(device).view(-1)
         if done:
             env.reset()
@@ -132,16 +133,16 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
             best_episode_reward = episode_reward
             best_weights = ppo.get_state()
         
-        print(f"global_step={global_step}, episodic_return={info['episode']['reward']}, episode_length={info['episode']['length']}")
+        if not WandbSettings.ON:
+            print(f"global_step={global_step}, episodic_return={info['episode']['reward']}, episode_length={info['episode']['length']}")
         if WandbSettings.ON and ((step % WandbSettings.LOGGING_INTERVAL) == 0) and (step != 0):
-            print("Logging episodic metrics")
             wandb.log({"charts/episodic_return" : episode_reward}, global_step)
             wandb.log({"charts/episodic_length" : info["episode"]["length"]}, global_step)
 
         if (step != 0) and ((global_step % NetParameters.SAVING_INTERVAL) == 0):
             print("Saving model...")
-            ppo.save_model(ppo.get_state(), f"{NetParameters.MODEL_FOLDER}/latest.pth")
-            ppo.save_model(best_weights, f"{NetParameters.MODEL_FOLDER}/best.pth")
+            ppo.save_model(ppo.get_state(), f"{NetParameters.MODEL_SAVE_FOLDER}/latest.pth")
+            ppo.save_model(best_weights, f"{NetParameters.MODEL_SAVE_FOLDER}/best.pth")
 
     print(f"{time.time() - start} seconds for an ep")
     return next_obs, next_intention, next_done, global_step
@@ -160,10 +161,14 @@ def get_device() -> torch.device:
 def get_env():
     # return DummyIntentionNavEnv(EnvParameters.OBS_SPACE_SHAPE)
     dataLoader = DataLoader("maps", "labelledData") # mapdir, labelledDataDir
-    
     # Clockwise positive for yaw
     
     return IntentionNavEnv(NetParameters.FOV_SIZE, dataLoader)
+
+def evaluate(num_episodes):
+    global_step = 0
+    for i in range(num_episodes):
+        next_obs, next_intention, next_done, global_step = rollout(env, buffer, global_step)
 
 if __name__ == "__main__":
     device = get_device()
@@ -184,9 +189,13 @@ if __name__ == "__main__":
     batch_size = TrainingParameters.N_STEPS * TrainingParameters.N_ENVS
     ppo = PPO(device, EnvParameters.OBS_SPACE_SHAPE, EnvParameters.ACT_SPACE_SHAPE)
     if NetParameters.LOAD_MODEL:
-        ppo.load_model(NetParameters.MODEL_PATH)
+        ppo.load_model(NetParameters.MODEL_LOAD_PATH)
     buffer = ReplayBuffer(TrainingParameters.N_STEPS, TrainingParameters.N_ENVS, EnvParameters.OBS_SPACE_SHAPE, EnvParameters.ACT_SPACE_SHAPE)
     env = get_env()
+    
+    if NetParameters.EVALUATE:
+        evaluate(NetParameters.NUM_EVALUATION_EPS)
+        exit()
     
     num_updates = TrainingParameters.TOTAL_TIMESTEPS // batch_size
     target_kl = None

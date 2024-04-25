@@ -4,6 +4,18 @@ from typing import Tuple, List
 
 trajectoryType = List[Tuple[float, float]]
 
+def unit_vector(vector):
+    return vector / np.linalg.norm(vector)
+
+def get_angle(pt1, pt2):
+    pt1 = np.array(pt1[:2])
+    pt2 = np.array(pt2[:2])
+    
+    pt1 = unit_vector(pt1)
+    pt2 = unit_vector(pt2)
+    
+    return np.arccos(np.clip(np.dot(pt1, pt2), -1.0, 1.0))
+    
 def get_distance(pt1, pt2):
     return np.linalg.norm(np.array(pt1[:2]) - np.array(pt2[:2]))
 

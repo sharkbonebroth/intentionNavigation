@@ -43,9 +43,12 @@ class DataLoader:
       self.allLabelledData.extend(self.loadSingleLabelledDataFile(labelledDataFilePath))
 
   def getLabelledDataAndMap(self) -> Tuple[TrainingDataPoint, Map]:
-    labelledData = self.allLabelledData[self.currDataId]
+    labelledData, robotMap = self.getLabelledDataAndMapAtId(self.currDataId)
     self.currDataId += 1
     if self.currDataId == len(self.allLabelledData):
       self.currDataId = 0
-
+    return labelledData, robotMap
+  
+  def getLabelledDataAndMapAtId(self, id) -> Tuple[TrainingDataPoint, Map]:
+    labelledData = self.allLabelledData[id]
     return labelledData, self.allMaps[labelledData.mapName]

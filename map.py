@@ -62,7 +62,6 @@ class Map:
 
   def registerCorrectTrajOnMap(self, trajectory: trajectoryType):
     self.colorImageNpArrayWithTrajPlotted = np.copy(self.colorImageNpArray)
-    print(f"LENGTH : {len(trajectory)}")
     for point in trajectory:
 
       x = int(point[0] / MAPSCALE)
