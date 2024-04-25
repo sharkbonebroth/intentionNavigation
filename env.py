@@ -203,7 +203,15 @@ class IntentionNavEnv(gymnasium.Env):
         # Final Image
         finalImg = np.concatenate([img, feedbackImageResized], axis=0)
 
+        # Get intention string
+        intentionStr = "left"
+        if self.curIntention == 0:
+            intentionStr = "straight"
+        elif self.curIntention == 1:
+            intentionStr = "right"
+
         plt.clf()
+        plt.title(intentionStr)
         plt.imshow(finalImg)
         plt.draw()
         plt.pause(0.01)
