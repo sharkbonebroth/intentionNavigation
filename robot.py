@@ -182,7 +182,7 @@ class Robot:
     return self.map.inflationZoneGrid[yDiscretized][xDiscretized]
 
   def getDisplacementRobotFrame(self, linX, omega):
-    if omega == 0:
+    if abs(omega) < 0.001:
       return linX * self.dt, 0
     linXDivOmega = linX/omega
     dx = linXDivOmega * math.sin(omega * self.dt)
