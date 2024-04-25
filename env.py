@@ -27,6 +27,7 @@ class Reward:
     STAGNATEPENALTY: float = -0.05
     VELOCITYTOOLOWPENALTY: float = -0.02
     VELOCITYTOOLOWTHRESHOLD: float = 1.0
+    ERRORHEADING: float = -0.2
     GOAL : float = 5.0
     ACTION : float = -0.3
 
@@ -140,6 +141,10 @@ class IntentionNavEnv(gymnasium.Env):
         reward += abs(action[0]) * 0.1
         
         # TODO: get angle2goal cost
+        endHeading = self.endPoint[2]
+        curHeading = curRobotPos[2]
+        errorHeading = abs(endHeading-curHeading)
+        reward += Reward.ERRORHEADING * errorHeading
         
         # reward = 1 / (1+distToTarget)
         
