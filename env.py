@@ -22,15 +22,15 @@ class DoneState(int, enum.Enum):
 
 class Reward:
     CRASHING : float = -5.0
-    ININFLATIONZONE : float = -2.5
+    ININFLATIONZONE : float = -1.5
     REGRESSPOINTPENALTY: float = -1.0
-    MAXPROGRESSPOINTREWARD: float = 1.0
+    MAXPROGRESSPOINTREWARD: float = 3.0
     STAGNATEPENALTY: float = -0.05
     VELOCITYTOOLOWPENALTY: float = -0.02
     VELOCITYTOOLOWTHRESHOLD: float = 1.0
     GOAL : float = 5.0
     ACTION : float = -0.3
-    ANGLESIMILARITYREWARD: 1.0
+    ANGLESIMILARITYREWARD: float = 1.0
 
 MAX_ANG_VELOCITY = np.pi
 MAX_LIN_VELOCITY = 3.0
@@ -137,6 +137,7 @@ class IntentionNavEnv(gymnasium.Env):
         if closestWaypointId >= self.prevWaypointID:
             # Reward proportional to how close it is to the closest waypoint
             reward = Reward.MAXPROGRESSPOINTREWARD / (1 + get_distance(self.robot.currPositionActual, self.curPath[closestWaypointId]))
+            # print(f"PROGGY REWARD: {reward}")
             
             # Penalize if it stagnates
             if closestWaypointId == self.prevWaypointID:
@@ -144,18 +145,22 @@ class IntentionNavEnv(gymnasium.Env):
         else:
             # Penalize!
             reward = Reward.REGRESSPOINTPENALTY - get_distance(self.robot.currPositionActual, self.curPath[self.curBestWaypointId])
+            # print(f"REGRESS PWNALTY: {Reward.REGRESSPOINTPENALTY - get_distance(self.robot.currPositionActual, self.curPath[self.curBestWaypointId])}")
 
         reward += abs(action[0]) * 0.1
         
         # Get angle2goal reward
-        dx = self.curPath[closestWaypointId + 1][0] - self.curPath[closestWaypointId][0]
-        dy = self.curPath[closestWaypointId + 1][1] - self.curPath[closestWaypointId][1]
-        dxdyMag = dx * dx + dy * dy
-        dxNormalized = dx / dxdyMag
-        dyNormalized = dy / dxdyMag
-        headingVecX = math.cos(curRobotPos[2])
-        headingVecY = math.sin(curRobotPos[2])
-        reward += Reward.ANGLESIMILARITYREWARD * (dxNormalized * headingVecX + dyNormalized * headingVecY)
+        # if closestWaypointId < (len(self.curPath) - 1):
+        #     dx = self.curPath[closestWaypointId + 1][0] - self.curPath[closestWaypointId][0]
+        #     dy = self.curPath[closestWaypointId + 1][1] - self.curPath[closestWaypointId][1]
+        #     dxdyMag = (dx * dx + dy * dy)**0.5
+        #     dxNormalized = dx / dxdyMag
+        #     dyNormalized = dy / dxdyMag
+        #     headingVecX = math.cos(curRobotPos[2])
+        #     headingVecY = math.sin(curRobotPos[2])
+        #     reward -= (1 - abs(dxNormalized * headingVecX + dyNormalized * headingVecY)) * Reward.ANGLESIMILARITYREWARD
+
+        # print(f"ANGLE SIMILARITY REWARD: {Reward.ANGLESIMILARITYREWARD * abs(dxNormalized * headingVecX + dyNormalized * headingVecY)}")
                 
         if self.robot.isInInflationZone():
             reward += Reward.ININFLATIONZONE
@@ -164,6 +169,8 @@ class IntentionNavEnv(gymnasium.Env):
             self.curBestWaypointId = closestWaypointId
 
         self.prevWaypointID = closestWaypointId
+
+        # print(f"ZE REWWARUDO IS: {reward}")
         
         return reward
     

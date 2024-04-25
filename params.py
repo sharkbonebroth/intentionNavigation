@@ -1,22 +1,22 @@
 class NetParameters:
     NET_SIZE = 512
-    INTENTION_SIZE = 8
+    INTENTION_SIZE = 32
     FOV_SIZE = (35, 35, 2)
     NUM_CHANNEL = 2
     # Intention Length
     VECTOR_LEN = 3  # [intention, action t-1 maybe?] (Primal vector length ) : [dx, dy, d total, action t-1]
     LOAD_MODEL = True
     MODEL_LOAD_PATH = "./models/latest.pth"
-    MODEL_SAVE_FOLDER = "C:/Users/niels/Downloads"
+    MODEL_SAVE_FOLDER = "./models"
     SAVING_INTERVAL = 200
     
     EVALUATE = True
     NUM_EVALUATION_EPS = 100
 
 class WandbSettings:
-    ON = False
+    ON = True
     LOGGING_INTERVAL = 30
-    EXPERIMENT_NAME = "multimaphehe"
+    EXPERIMENT_NAME = "fancyReward"
     EXPERIMENT_PROJECT = "intentionNav"
 
 class EnvParameters:
@@ -39,7 +39,7 @@ class TrainingParameters:
     N_EPOCHS = 10
     N_ENVS = 1
     N_STEPS = 128
-    TOTAL_TIMESTEPS = 25000
+    TOTAL_TIMESTEPS = 50000
     ANNEAL_LR = True
     NUM_MINIBATCHES = 48
     MINIBATCH_SIZE = 64
