@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Tuple
 from scipy import ndimage
 from skimage.draw import rectangle
+from utilTypes import trajectoryType
 
 MAPSCALE = 0.1 # each pixel is 0.1m
 
@@ -15,6 +16,7 @@ class Map:
     self.mapGrid = mapGrid
     self.inflationZoneGrid = self.getInflationZoneGrid(mapGrid)
     self.colorImageNpArray = self.getColorImageNpArray()
+    self.colorImageNpArrayWithTrajPlotted = None
     self.name = ""
 
   @classmethod
@@ -57,6 +59,20 @@ class Map:
       colorImageNpArray = colorImageNpArray.repeat(scaleFactor, axis=0).repeat(scaleFactor, axis=1)
 
     return colorImageNpArray
+
+  def registerCorrectTrajOnMap(self, trajectory: trajectoryType):
+    self.colorImageNpArrayWithTrajPlotted = np.copy(self.colorImageNpArray)
+    print(f"LENGTH : {len(trajectory)}")
+    for point in trajectory:
+
+      x = int(point[0] / MAPSCALE)
+      y = int(point[1] / MAPSCALE)
+     
+      # if y < 0 or y >= self.colorImageNpArrayWithTrajPlotted.shape[0] or x < 0 or x >= self.colorImageNpArrayWithTrajPlotted.shape[1]:
+      self.colorImageNpArrayWithTrajPlotted[y][x] = np.array([0, 255, 0])
+
+  def getColorImageWithTrajPlotted(self) -> np.ndarray:
+    return self.colorImageNpArrayWithTrajPlotted
 
 class CellularAutomataMapGenerator:
   def __init__(self):

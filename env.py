@@ -45,6 +45,7 @@ class IntentionNavEnv(gymnasium.Env):
     def setLabelledDataAndMap(self, labelledData: TrainingDataPoint, map: Map):
         self.curPath = labelledData.trajectory
         self.curIntention = labelledData.direction
+        map.registerCorrectTrajOnMap(self.curPath)
         self.robot = Robot(map=map, startX=labelledData.startPoint[0], startY=labelledData.startPoint[1], yaw=labelledData.startPoint[2], numOdomToPlot=200)
         self.startPoint = labelledData.startPoint
         self.endPoint = labelledData.endPoint
@@ -155,7 +156,7 @@ class IntentionNavEnv(gymnasium.Env):
     
     
     def render(self, feedbackImage: np.ndarray):
-        img = np.copy(self.robot.mapImgWithPerfectOdomPlotted)
+        img = np.copy(self.robot.mapImgWithTrajAndPerfectOdomPlotted)
         
         # Plot the current position of the robot
         robotPosition = self.robot.currPositionActual
