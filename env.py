@@ -11,6 +11,7 @@ from skimage.transform import resize
 from skimage import util
 from dataLoader import DataLoader, TrainingDataPoint
 import enum
+from params import EnvParameters
 
 class DoneState(int, enum.Enum):
     NOT_DONE = 0
@@ -150,8 +151,10 @@ class IntentionNavEnv(gymnasium.Env):
         return reward
     
     def reset(self):
-        # currLabelledData, map = self.dataLoader.getLabelledDataAndMap()
-        currLabelledData, map = self.dataLoader.getLabelledDataAndMapAtId(0)
+        if EnvParameters.USE_SINGLE_DATA:
+            currLabelledData, map = self.dataLoader.getLabelledDataAndMapAtId(0)
+        else:
+            currLabelledData, map = self.dataLoader.getLabelledDataAndMap()
         self.setLabelledDataAndMap(currLabelledData, map)
         # if self.trainingId >= len(self.paths):
         #     return np.zeros((640,480))

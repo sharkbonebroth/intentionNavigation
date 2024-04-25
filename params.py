@@ -2,7 +2,6 @@ class NetParameters:
     NET_SIZE = 512
     INTENTION_SIZE = 8
     FOV_SIZE = (35, 35, 2)
-    FOV_SIZE_RGB = (50,50,3)
     NUM_CHANNEL = 2
     # Intention Length
     VECTOR_LEN = 3  # [intention, action t-1 maybe?] (Primal vector length ) : [dx, dy, d total, action t-1]
@@ -11,7 +10,7 @@ class NetParameters:
     MODEL_SAVE_FOLDER = "C:/Users/niels/Downloads"
     SAVING_INTERVAL = 200
     
-    EVALUATE = False
+    EVALUATE = True
     NUM_EVALUATION_EPS = 100
 
 class WandbSettings:
@@ -21,6 +20,7 @@ class WandbSettings:
     EXPERIMENT_PROJECT = "intentionNav"
 
 class EnvParameters:
+    USE_SINGLE_DATA = False
     RENDER = True
     OBS_SPACE_SHAPE = NetParameters.FOV_SIZE
     FOV_SIZE=NetParameters.FOV_SIZE[0]
