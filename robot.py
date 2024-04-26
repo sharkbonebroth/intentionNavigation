@@ -10,7 +10,7 @@ import time
 from PIL import Image
 
 odometryDataPointType = Tuple[float, float] # delta x, delta y
-LIDARRANGE = 7
+LIDARRANGE = 10
 FOV_SIDE_SIZE = int(LIDARRANGE/MAPSCALE + 1)
 FOV_SIZE = (FOV_SIDE_SIZE, FOV_SIDE_SIZE) # LIDARRANGE / MAPSCALE * 2 + 1
 

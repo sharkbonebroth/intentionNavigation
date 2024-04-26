@@ -65,10 +65,31 @@ class PPO:
         obs = obs.to(self.device)
         onehot_intention = torch.from_numpy(getIntentionAsOnehot(intention, onehotSize=NetParameters.VECTOR_LEN)).to(self.device)
         action_mean, action_logstd, value = self.policy(obs, onehot_intention)
-        action_std = STD_SCALE * torch.exp(action_logstd)
-        probs = torch.distributions.Normal(action_mean, action_std)
+
+        actualActionMean = torch.zeros((intention.shape[0], 2))
+        actualActionLogstd = torch.zeros((intention.shape[0], 2))
+
+        idx = 0
+        for intentionDetached in intention.cpu().numpy():
+            actualActionMean[idx] = action_mean[0,:2]
+            actualActionLogstd[idx] = action_logstd[0,:2]
+            if intentionDetached == 0.0:
+                actualActionMean[idx] = action_mean[0,2:4]
+                actualActionLogstd[idx] = action_logstd[0,2:4]
+            elif intentionDetached == 1.0:
+                actualActionMean[idx] = action_mean[0,4:]
+                actualActionLogstd[idx] = action_logstd[0,4:]
+            idx += 1
+
+        actualActionMean = actualActionMean.to(self.device)
+        actionStd = STD_SCALE * torch.exp(actualActionLogstd.to(self.device))
+        probs = torch.distributions.Normal(actualActionMean, actionStd)
+
         if action is None:
             action = probs.sample()
+
+        # print(f"intentions: {intention}, actionMeans: {action_mean}, actionMeanActual: {actualActionMean}")
+
         return action , probs.log_prob(action).sum(1) , probs.entropy().sum(1), value
         
     def get_value(self, obs, intention):
@@ -134,7 +155,7 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
             best_weights = ppo.get_state()
         
         if not WandbSettings.ON:
-            print(f"global_step={global_step}, episodic_return={info['episode']['reward']}, episode_length={info['episode']['length']}")
+            print(f"global_step={global_step}, reward = {reward}, episodic_return={info['episode']['reward']}, episode_length={info['episode']['length']}")
         if WandbSettings.ON and ((step % WandbSettings.LOGGING_INTERVAL) == 0) and (step != 0):
             wandb.log({"charts/episodic_return" : episode_reward}, global_step)
             wandb.log({"charts/episodic_length" : info["episode"]["length"]}, global_step)
@@ -160,7 +181,12 @@ def get_device() -> torch.device:
         
 def get_env():
     # return DummyIntentionNavEnv(EnvParameters.OBS_SPACE_SHAPE)
-    dataLoader = DataLoader("maps", "labelledData") # mapdir, labelledDataDir
+    dataLoader = None
+    if NetParameters.EVALUATE:
+        dataLoader = DataLoader("maps", "evaluationData")
+        print("EVALUATION MODE! USING EVALUATION DATALOADER")
+    else:
+        dataLoader = DataLoader("maps", "labelledData") # mapdir, labelledDataDir
     # Clockwise positive for yaw
     
     return IntentionNavEnv(NetParameters.FOV_SIZE, dataLoader)
@@ -190,7 +216,7 @@ if __name__ == "__main__":
     ppo = PPO(device, EnvParameters.OBS_SPACE_SHAPE, EnvParameters.ACT_SPACE_SHAPE)
     if NetParameters.LOAD_MODEL:
         ppo.load_model(NetParameters.MODEL_LOAD_PATH)
-    buffer = ReplayBuffer(TrainingParameters.N_STEPS, TrainingParameters.N_ENVS, EnvParameters.OBS_SPACE_SHAPE, EnvParameters.ACT_SPACE_SHAPE)
+    buffer = ReplayBuffer(TrainingParameters.N_STEPS, TrainingParameters.N_ENVS, EnvParameters.OBS_SPACE_SHAPE, (2, ))
     env = get_env()
     
     if NetParameters.EVALUATE:

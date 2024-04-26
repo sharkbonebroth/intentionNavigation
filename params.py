@@ -1,7 +1,7 @@
 class NetParameters:
     NET_SIZE = 512
     INTENTION_SIZE = 32
-    FOV_SIZE = (35, 35, 2)
+    FOV_SIZE = (41, 41, 2)
     NUM_CHANNEL = 2
     # Intention Length
     VECTOR_LEN = 3  # [intention, action t-1 maybe?] (Primal vector length ) : [dx, dy, d total, action t-1]
@@ -14,9 +14,9 @@ class NetParameters:
     NUM_EVALUATION_EPS = 100
 
 class WandbSettings:
-    ON = True
+    ON = False
     LOGGING_INTERVAL = 30
-    EXPERIMENT_NAME = "fancyReward"
+    EXPERIMENT_NAME = "WORKINGLEPookieBearUwUSnuzzyWuzzy"
     EXPERIMENT_PROJECT = "intentionNav"
 
 class EnvParameters:
@@ -24,7 +24,7 @@ class EnvParameters:
     RENDER = True
     OBS_SPACE_SHAPE = NetParameters.FOV_SIZE
     FOV_SIZE=NetParameters.FOV_SIZE[0]
-    ACT_SPACE_SHAPE = (2,)
+    ACT_SPACE_SHAPE = (6, )
     
 class TrainingParameters:
     lr_actor = 1e-5
@@ -38,7 +38,7 @@ class TrainingParameters:
     POLICY_COEF = 10
     N_EPOCHS = 10
     N_ENVS = 1
-    N_STEPS = 128
+    N_STEPS = 256
     TOTAL_TIMESTEPS = 50000
     ANNEAL_LR = True
     NUM_MINIBATCHES = 48

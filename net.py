@@ -87,7 +87,7 @@ class ActorCritic(nn.Module):
         x_3 = torch.cat((x_1, x_2), -1)
         h1 = F.relu(self.fully_connected_2(x_3))
         h1 = self.fully_connected_3(h1)
-        h2 = F.relu(h1 + x_3)
+        h2 = F.relu(h1)
         h2 = h2.view(h2.shape[0], h2.shape[1], 1, 1)
         
         x = rearrange(h2, 'b c h w -> b (h w) c')

@@ -22,8 +22,8 @@ class DoneState(int, enum.Enum):
 
 class Reward:
     CRASHING : float = -5.0
-    ININFLATIONZONE : float = -1.5
-    REGRESSPOINTPENALTY: float = -1.0
+    ININFLATIONZONE : float = -1.0
+    REGRESSPOINTPENALTY: float = -2.0
     MAXPROGRESSPOINTREWARD: float = 3.0
     STAGNATEPENALTY: float = -0.05
     VELOCITYTOOLOWPENALTY: float = -0.02
@@ -68,7 +68,7 @@ class IntentionNavEnv(gymnasium.Env):
 
         
     def getObservations(self):
-        return self.robot.getBinaryFeedbackImage(scaleFactor=4), float(self.curIntention)
+        return self.robot.getBinaryFeedbackImage(scaleFactor=5), float(self.curIntention)
         
     def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
         action = np.clip(action, self.action_space.low, self.action_space.high)
@@ -92,40 +92,12 @@ class IntentionNavEnv(gymnasium.Env):
         self.totalReward += reward
         self.steps += 1
         info['episode'] = {
-            'reward' : self.totalReward / self.steps,
+            'reward' : self.totalReward,
             'length' : self.steps
         }
         return obs, intention, reward, done, info
     
-    def get_reward(self, action : np.ndarray, curRobotPos, doneState):
-        # closestWaypointId = find_closest_point(curRobotPos[:2], self.curPath)
-
-        # if closestWaypointId >= self.prevWaypointID:
-        #     # Reward proportional to how close it is to the closest waypoint
-        #     reward = Reward.MAXPROGRESSPOINTREWARD / (1 + get_distance(self.robot.currPositionActual, self.curPath[closestWaypointId]))
-            
-        #     # Penalize if it stagnates
-        #     if closestWaypointId == self.prevWaypointID:
-        #         reward += Reward.STAGNATEPENALTY
-        # else:
-        #     # Penalize!
-        #     reward = Reward.REGRESSPOINTPENALTY - get_distance(self.robot.currPositionActual, self.curPath[self.curBestWaypointId])
-        
-        # if self.robot.hasCrashedIntoWall():
-        #     reward += Reward.CRASHING
-        # elif self.robot.isInInflationZone():
-        #     reward += Reward.ININFLATIONZONE
-
-        # if action[0] < Reward.VELOCITYTOOLOWTHRESHOLD:
-        #     reward += Reward.VELOCITYTOOLOWPENALTY
-        
-        # if closestWaypointId > self.curBestWaypointId:
-        #     self.curBestWaypointId = closestWaypointId
-        
-        # self.prevWaypointID = closestWaypointId
-
-        # return reward
-        
+    def get_reward(self, action : np.ndarray, curRobotPos, doneState):        
         if doneState == DoneState.GOAL:
             return Reward.GOAL
         elif self.robot.hasCrashedIntoWall():
@@ -134,33 +106,36 @@ class IntentionNavEnv(gymnasium.Env):
         
         reward = Reward.ACTION
 
-        if closestWaypointId >= self.prevWaypointID:
+        if closestWaypointId >= self.curBestWaypointId:
             # Reward proportional to how close it is to the closest waypoint
             reward = Reward.MAXPROGRESSPOINTREWARD / (1 + get_distance(self.robot.currPositionActual, self.curPath[closestWaypointId]))
             # print(f"PROGGY REWARD: {reward}")
-            
-            # Penalize if it stagnates
-            if closestWaypointId == self.prevWaypointID:
-                reward += Reward.STAGNATEPENALTY
-        else:
-            # Penalize!
+
+        # Penalize if it stagnates
+        # if closestWaypointId == self.prevWaypointID:
+        #     reward += Reward.STAGNATEPENALTY
+
+        # Penalize!
+        if closestWaypointId < self.curBestWaypointId:
             reward = Reward.REGRESSPOINTPENALTY - get_distance(self.robot.currPositionActual, self.curPath[self.curBestWaypointId])
             # print(f"REGRESS PWNALTY: {Reward.REGRESSPOINTPENALTY - get_distance(self.robot.currPositionActual, self.curPath[self.curBestWaypointId])}")
 
-        reward += abs(action[0]) * 0.1
+        if abs(action[0]) < 0.3:
+            reward -= 0.05
+        # reward += abs(action[0]) * 0.1
         
         # Get angle2goal reward
-        # if closestWaypointId < (len(self.curPath) - 1):
-        #     dx = self.curPath[closestWaypointId + 1][0] - self.curPath[closestWaypointId][0]
-        #     dy = self.curPath[closestWaypointId + 1][1] - self.curPath[closestWaypointId][1]
-        #     dxdyMag = (dx * dx + dy * dy)**0.5
-        #     dxNormalized = dx / dxdyMag
-        #     dyNormalized = dy / dxdyMag
-        #     headingVecX = math.cos(curRobotPos[2])
-        #     headingVecY = math.sin(curRobotPos[2])
-        #     reward -= (1 - abs(dxNormalized * headingVecX + dyNormalized * headingVecY)) * Reward.ANGLESIMILARITYREWARD
+        if closestWaypointId < (len(self.curPath) - 1):
+            dx = self.curPath[closestWaypointId + 1][0] - self.curPath[closestWaypointId][0]
+            dy = self.curPath[closestWaypointId + 1][1] - self.curPath[closestWaypointId][1]
+            dxdyMag = (dx * dx + dy * dy)**0.5
+            dxNormalized = dx / dxdyMag
+            dyNormalized = dy / dxdyMag
+            headingVecX = math.cos(curRobotPos[2])
+            headingVecY = math.sin(curRobotPos[2])
+            reward -= (1 - abs(dxNormalized * headingVecX + dyNormalized * headingVecY)) * Reward.ANGLESIMILARITYREWARD
 
-        # print(f"ANGLE SIMILARITY REWARD: {Reward.ANGLESIMILARITYREWARD * abs(dxNormalized * headingVecX + dyNormalized * headingVecY)}")
+        # print(f"ANGLE SIMILARITY PENALTY: {-(1 - abs(dxNormalized * headingVecX + dyNormalized * headingVecY)) * Reward.ANGLESIMILARITYREWARD}")
                 
         if self.robot.isInInflationZone():
             reward += Reward.ININFLATIONZONE
