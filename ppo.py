@@ -11,7 +11,7 @@ from env import IntentionNavEnv
 from utilTypes import getIntentionAsOnehot
 import os
 
-STD_SCALE = 0.8
+STD_SCALE = 0.1
 class ReplayBuffer:
     def __init__(self, num_steps : int, num_envs : int, obs_space_shape : tuple, act_space_shape : tuple):
         batch_shape = (num_steps, num_envs)

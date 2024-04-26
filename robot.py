@@ -241,7 +241,8 @@ class Robot:
       print("Went out of bounds!")
     else:
       self.mapImgWithPerfectOdomPlotted[currYWorldActualDiscretized][currXWorldActualDiscretized] = np.array([255,0,0])
-      self.mapImgWithTrajAndPerfectOdomPlotted[currYWorldActualDiscretized][currXWorldActualDiscretized] = np.array([255,0,0])
+      if self.mapImgWithTrajAndPerfectOdomPlotted is not None:
+        self.mapImgWithTrajAndPerfectOdomPlotted[currYWorldActualDiscretized][currXWorldActualDiscretized] = np.array([255,0,0])
 
     
 # Class implementating the low level controller, which will be used to control the robot to follow the waypoints. This 

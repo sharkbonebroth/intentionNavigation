@@ -4,24 +4,24 @@ class NetParameters:
     FOV_SIZE = (41, 41, 1)
     NUM_CHANNEL = 1
     # Intention Length
-    VECTOR_LEN = 3  # [intention, action t-1 maybe?] (Primal vector length ) : [dx, dy, d total, action t-1]
+    VECTOR_LEN = 3  
     LOAD_MODEL = True
-    MODEL_LOAD_PATH = "./models/latest.pth"
+    MODEL_LOAD_PATH = "./models/intentionNavigationTrained.pth"
     MODEL_SAVE_FOLDER = "./models"
     SAVING_INTERVAL = 200
     
-    EVALUATE = False
+    EVALUATE = True
     NUM_EVALUATION_EPS = 100
 
 class WandbSettings:
-    ON = True
+    ON = False
     LOGGING_INTERVAL = 30
-    EXPERIMENT_NAME = "SARTORETTIGUILLAME"
+    EXPERIMENT_NAME = "intentionSelection"
     EXPERIMENT_PROJECT = "intentionNav"
 
 class EnvParameters:
     USE_SINGLE_DATA = False
-    RENDER = False
+    RENDER = True
     OBS_SPACE_SHAPE = NetParameters.FOV_SIZE
     FOV_SIZE=NetParameters.FOV_SIZE[0]
     ACT_SPACE_SHAPE = (6, )
