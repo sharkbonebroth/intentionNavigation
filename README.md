@@ -1,5 +1,7 @@
 # intentionNavigation
 
+This code base contains code for training a model to perform intention based navigation. The model will be fed with an intention (left, straight or right), and attempt to navigate the robot accordingly. It should be noted that the model in this version of the code only uses LiDAR image without plotted odometry. More details are laid out in our report. 
+
 ## Getting started
 
 Run the following commands to install the required packages for this repository
