@@ -117,7 +117,7 @@ class IntentionNavEnv(gymnasium.Env):
 
         # Penalize!
         if closestWaypointId < self.curBestWaypointId:
-            reward = Reward.REGRESSPOINTPENALTY - get_distance(self.robot.currPositionActual, self.curPath[self.curBestWaypointId])
+            reward = Reward.REGRESSPOINTPENALTY # - get_distance(self.robot.currPositionActual, self.curPath[self.curBestWaypointId])
             # print(f"REGRESS PWNALTY: {Reward.REGRESSPOINTPENALTY - get_distance(self.robot.currPositionActual, self.curPath[self.curBestWaypointId])}")
 
         if abs(action[0]) < 0.3:

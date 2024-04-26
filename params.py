@@ -10,18 +10,18 @@ class NetParameters:
     MODEL_SAVE_FOLDER = "./models"
     SAVING_INTERVAL = 200
     
-    EVALUATE = True
+    EVALUATE = False
     NUM_EVALUATION_EPS = 100
 
 class WandbSettings:
-    ON = False
+    ON = True
     LOGGING_INTERVAL = 30
-    EXPERIMENT_NAME = "WORKINGLEPookieBearUwUSnuzzyWuzzy"
+    EXPERIMENT_NAME = "SARTORETTIGUILLAME"
     EXPERIMENT_PROJECT = "intentionNav"
 
 class EnvParameters:
     USE_SINGLE_DATA = False
-    RENDER = True
+    RENDER = False
     OBS_SPACE_SHAPE = NetParameters.FOV_SIZE
     FOV_SIZE=NetParameters.FOV_SIZE[0]
     ACT_SPACE_SHAPE = (6, )
@@ -39,7 +39,7 @@ class TrainingParameters:
     N_EPOCHS = 10
     N_ENVS = 1
     N_STEPS = 256
-    TOTAL_TIMESTEPS = 50000
+    TOTAL_TIMESTEPS = 1000000
     ANNEAL_LR = True
     NUM_MINIBATCHES = 48
     MINIBATCH_SIZE = 64
