@@ -1,8 +1,8 @@
 class NetParameters:
     NET_SIZE = 512
     INTENTION_SIZE = 32
-    FOV_SIZE = (41, 41, 2)
-    NUM_CHANNEL = 2
+    FOV_SIZE = (41, 41, 1)
+    NUM_CHANNEL = 1
     # Intention Length
     VECTOR_LEN = 3  # [intention, action t-1 maybe?] (Primal vector length ) : [dx, dy, d total, action t-1]
     LOAD_MODEL = True

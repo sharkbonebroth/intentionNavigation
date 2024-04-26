@@ -138,7 +138,7 @@ def rollout(env : gymnasium.Env, buffer : ReplayBuffer, global_step : int):
         # Gym part
         next_obs, next_intention, reward, done, info = env.step(action.cpu().numpy().flatten())
         if EnvParameters.RENDER:
-            env.render(next_obs)
+            env.render()
         buffer.rewards[step] = torch.tensor(reward).to(device).view(-1)
         if done:
             env.reset()

@@ -68,7 +68,7 @@ class IntentionNavEnv(gymnasium.Env):
 
         
     def getObservations(self):
-        return self.robot.getBinaryFeedbackImage(scaleFactor=5), float(self.curIntention)
+        return (self.robot.getBinaryFeedbackImage(scaleFactor=5))[:,:,1:], float(self.curIntention)
         
     def step(self, action : np.ndarray) -> Tuple[np.ndarray, float, bool, dict]:
         action = np.clip(action, self.action_space.low, self.action_space.high)
@@ -177,7 +177,7 @@ class IntentionNavEnv(gymnasium.Env):
         return DoneState.NOT_DONE
     
     
-    def render(self, feedbackImage: np.ndarray):
+    def render(self):
         img = np.copy(self.robot.mapImgWithTrajAndPerfectOdomPlotted)
         
         # Plot the current position of the robot
@@ -195,6 +195,7 @@ class IntentionNavEnv(gymnasium.Env):
         img[rr, cc] = np.array([0, 255, 0])
 
         # Get the odom image
+        feedbackImage = self.robot.getBinaryFeedbackImage(scaleFactor=5)
         feedbackImage = self.robot.convertBinaryFeedbackImageToColor(feedbackImage)
         feedbackImageResized = resize(feedbackImage, (img.shape[0], img.shape[1]), anti_aliasing=True)
         feedbackImageResized = util.img_as_ubyte(feedbackImageResized)
